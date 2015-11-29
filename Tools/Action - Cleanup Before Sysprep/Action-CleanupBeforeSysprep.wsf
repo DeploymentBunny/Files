@@ -6,7 +6,7 @@
 '// Solution: RefImage Creation
 '// Purpose: Used to remove files and folders before sysprep
 '// Usage: cscript Action-CleanupBeforeSysprep.wsf [/debug:true]
-'// Version: 1.0 - May 20 2014
+'// Version: 1.2 - 2015-11-29
 '// Mikael Nystrom & Johan Arwidmark
 '// This script is provided "AS IS" with no warranties, confers no rights and 
 '// is not supported by the authors, Deployment Bunny or Deployment Artists.
