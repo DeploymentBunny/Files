@@ -1,0 +1,419 @@
+<job id="Action-CleanupBeforeSysprep">
+<script language="VBScript" src="..\..\Scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+'//----------------------------------------------------------------------------
+'// Solution: RefImage Creation
+'// Purpose: Used to remove files and folders before sysprep
+'// Usage: cscript Action-CleanupBeforeSysprep.wsf [/debug:true]
+'// Version: 1.0 - May 20 2014
+'// Mikael Nystrom & Johan Arwidmark
+'// This script is provided "AS IS" with no warranties, confers no rights and 
+'// is not supported by the authors, Deployment Bunny or Deployment Artists.
+'//
+'//----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sActionName
+	Dim sOSCurrentVersion
+	Dim sOSCurrentVersionShort
+	Dim sIsServerOS
+	Dim sExe
+	Dim sFolder
+	
+	sActionName = "Action-CleanupBeforeSysprep"
+	sOSCurrentVersion = oEnvironment.item("OSCurrentVersion")
+	sIsServerOS = oEnvironment.item("IsServerOS")
+	sOSCurrentVersionShort = Left(oEnvironment.item("OSCurrentVersion"),3)
+	
+	'Starting
+	oLogging.CreateEntry sActionName & ": Starting", LogTypeInfo
+
+	Select Case sIsServerOS
+
+		Case "False"
+		'Client OS
+		oLogging.CreateEntry sActionName & ": Running on Client OS", LogTypeInfo
+
+			Select Case sOSCurrentVersionShort
+			' Windows 7 SP1
+			Case "6.1"
+			oLogging.CreateEntry sActionName & ": Running on Windows 7", LogTypeInfo
+
+			'Add sagerun:5432 to registy
+			oLogging.CreateEntry sActionName & ": Adding reg values for CleanMgr", LogTypeInfo
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Active Setup Temp Folders\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Content Indexer Cleaner\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Device Driver Packages\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Downloaded Program Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Internet Cache Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Memory Dump Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Offline Pages Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Old ChkDsk Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Previous Installations\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Recycle Bin\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Service Pack Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Setup Log Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error memory dump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error minidump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Setup Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Sync Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Upgrade Discarded Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows ESD installation files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Upgrade Log Files\StateFlags5432", "00000002", "REG_DWORD"
+
+			'Execute CleanMgr.exe
+			oLogging.CreateEntry sActionName & ": Running CleanMgr", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("CleanMgr.exe /sagerun:5432")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+			
+			' Windows 8
+			Case "6.2"
+			oLogging.CreateEntry sActionName & ": Running on Windows 8", LogTypeInfo
+
+			'Add sagerun:5432 to registy
+			oLogging.CreateEntry sActionName & ": Adding reg values for CleanMgr", LogTypeInfo
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Virtual Machine\Guest\OSD", "Done", "REG_SZ"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Active Setup Temp Folders\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Content Indexer Cleaner\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Device Driver Packages\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Downloaded Program Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Internet Cache Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Memory Dump Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Offline Pages Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Old ChkDsk Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Previous Installations\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Recycle Bin\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Service Pack Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Setup Log Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error memory dump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error minidump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Setup Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Sync Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Upgrade Discarded Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows ESD installation files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Upgrade Log Files\StateFlags5432", "00000002", "REG_DWORD"
+
+			'Execute CleanMgr.exe
+			oLogging.CreateEntry sActionName & ": Running CleanMgr", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("CleanMgr.exe /sagerun:5432")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+						
+			'Execute DISM.exe
+			oLogging.CreateEntry sActionName & ": Running DSIM", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+			
+			' Windows 8.1
+			Case "6.3"
+			oLogging.CreateEntry sActionName & ": Running on Windows 8.1", LogTypeInfo
+
+			'Add sagerun:5432 to registy
+			oLogging.CreateEntry sActionName & ": Adding reg values for CleanMgr", LogTypeInfo
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Virtual Machine\Guest\OSD", "Done", "REG_SZ"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Active Setup Temp Folders\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Content Indexer Cleaner\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Device Driver Packages\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Downloaded Program Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Internet Cache Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Memory Dump Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Offline Pages Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Old ChkDsk Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Previous Installations\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Recycle Bin\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Service Pack Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Setup Log Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error memory dump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error minidump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Setup Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Sync Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Upgrade Discarded Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows ESD installation files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Upgrade Log Files\StateFlags5432", "00000002", "REG_DWORD"
+
+			'Execute CleanMgr.exe
+			oLogging.CreateEntry sActionName & ": Running CleanMgr", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("CleanMgr.exe /sagerun:5432")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+						
+			'Execute DISM.exe
+			oLogging.CreateEntry sActionName & ": Running DISM", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+
+			' Windows 10
+			Case "10."
+			oLogging.CreateEntry sActionName & ": Running on Windows 10 - first run", LogTypeInfo
+
+			'Add sagerun:5432 to registy
+			oLogging.CreateEntry sActionName & ": Adding reg values for CleanMgr", LogTypeInfo
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Virtual Machine\Guest\OSD", "Done", "REG_SZ"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Active Setup Temp Folders\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Content Indexer Cleaner\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Device Driver Packages\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Downloaded Program Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Internet Cache Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Memory Dump Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Offline Pages Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Old ChkDsk Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Previous Installations\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Recycle Bin\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Service Pack Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Setup Log Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error memory dump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error minidump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Setup Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Sync Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Upgrade Discarded Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows ESD installation files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Upgrade Log Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			
+			'Execute CleanMgr.exe
+			oLogging.CreateEntry sActionName & ": Running CleanMgr", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("CleanMgr.exe /sagerun:5432")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+
+			'Execute DISM.exe
+			oLogging.CreateEntry sActionName & ": Running DISM", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+			
+			End Select
+			
+		Case "True"
+		'Server OS
+		oLogging.CreateEntry sActionName & ": Running on Server OS", LogTypeInfo
+
+			Select Case sOSCurrentVersionShort
+			
+			' Windows Server 2008 R2 SP1
+			Case "6.1"
+			oLogging.CreateEntry sActionName & ": Running on Windows Server 2008 R2", LogTypeInfo
+			
+			'Copy cleanmgr.exe to System32
+			oLogging.CreateEntry sActionName & ": Copying cleanmgr.exe", LogTypeInfo
+			sExe = "C:\Windows\winsxs\amd64_microsoft-windows-cleanmgr_31bf3856ad364e35_6.1.7600.16385_none_c9392808773cd7da\cleanmgr.exe"
+			sFolder = "C:\Windows\System32\"
+				If not oFSO.FileExists(sExe) then
+			oLogging.CreateEntry sActionName & ": " & sExe & " was not found, unable to continue", LogTypeInfo
+				ZTIProcess = Failure
+				Exit Function
+				End if
+			oLogging.CreateEntry sActionName & ": Copy " & sExe & " To " & sFolder, LogTypeInfo	
+			oFSO.GetFile(sExe).Copy sFolder & oFSO.GetFileName(sExe),True	
+
+			'Copy cleanmgr.exe.mui
+			oLogging.CreateEntry sActionName & ": Copying CleanMgr MUI", LogTypeInfo
+			sExe = "C:\Windows\winsxs\amd64_microsoft-windows-cleanmgr.resources_31bf3856ad364e35_6.1.7600.16385_en-us_b9cb6194b257cc63\cleanmgr.exe.mui"
+			sFolder = "C:\Windows\System32\en-US\"
+				If not oFSO.FileExists(sExe) then
+				oLogging.CreateEntry sActionName & ": " & sExe & " was not found, unable to continue", LogTypeInfo
+				ZTIProcess = Failure
+				Exit Function
+				End if
+			oLogging.CreateEntry sActionName & ": Copy " & sExe & " To " & sFolder, LogTypeInfo	
+			oFSO.GetFile(sExe).Copy sFolder & oFSO.GetFileName(sExe),True	
+
+			'Add sagerun:5432 to registy
+			oLogging.CreateEntry sActionName & ": Adding reg values for CleanMgr", LogTypeInfo
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Active Setup Temp Folders\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Content Indexer Cleaner\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Device Driver Packages\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Downloaded Program Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Internet Cache Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Memory Dump Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Offline Pages Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Old ChkDsk Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Previous Installations\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Recycle Bin\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Service Pack Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Setup Log Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error memory dump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\System error minidump files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Setup Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Temporary Sync Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Thumbnail Cache\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Update Cleanup\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Upgrade Discarded Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Archive Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Error Reporting System Queue Files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows ESD installation files\StateFlags5432", "00000002", "REG_DWORD"
+			oShell.RegWrite "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\Windows Upgrade Log Files\StateFlags5432", "00000002", "REG_DWORD"
+
+			'Execute CleanMgr.exe
+			oLogging.CreateEntry sActionName & ": Running CleanMgr", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("CleanMgr.exe /sagerun:5432")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+						
+			' Windows Server 2012
+			Case "6.2"
+			oLogging.CreateEntry sActionName & ": Running on Windows Server 2012", LogTypeInfo
+			
+			'Execute DISM.exe
+			oLogging.CreateEntry sActionName & ": Running DISM", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+						
+			' Windows Server 2012 R2
+			Case "6.3"
+			oLogging.CreateEntry sActionName & ": Running on Windows Server Technical Preview", LogTypeInfo
+			
+			'Execute DISM.exe
+			oLogging.CreateEntry sActionName & ": Running DISM", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+			
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+
+			' Windows Server "10"
+			Case "10."
+			oLogging.CreateEntry sActionName & ": Running on Windows Server Technical Preview", LogTypeInfo
+			
+			'Execute DISM.exe
+			oLogging.CreateEntry sActionName & ": Running DISM", LogTypeInfo
+			iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
+			oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+			
+			if (iRetVal = 0) or (iRetVal = 3010) then
+				ZTIProcess = Success 
+			Else 
+				ZTIProcess = Failure
+			End If
+			
+			End Select
+
+		Case Else
+		'Unknown
+		oLogging.CreateEntry sActionName & ": Running on unknown OS type", LogTypeInfo
+
+	End Select
+
+	oLogging.CreateEntry oUtility.ScriptName & ": Return code from command = " & iRetVal, LogTypeInfo
+	oLogging.CreateEntry oUtility.ScriptName & ": Finished", LogTypeInfo
+
+	End Function 
+</script>
+</job>
