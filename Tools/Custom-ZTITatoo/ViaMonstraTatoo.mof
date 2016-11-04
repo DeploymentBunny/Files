@@ -1,0 +1,85 @@
+
+//==================================================================
+// Register Registry property provider (shipped with WMI)
+// Refer to WMI SDK documentation for use
+//==================================================================
+
+#pragma namespace("\\\\.\\root\\cimv2")
+
+// Registry instance provider
+instance of __Win32Provider as $InstProv
+{
+	Name    ="RegProv" ;
+	ClsID   = "{fe9af5c0-d3b6-11ce-a5b6-00aa00680c3f}" ;
+	ImpersonationLevel = 1;
+	PerUserInitialization = "False";
+};
+
+instance of __InstanceProviderRegistration
+{
+	Provider    = $InstProv;
+	SupportsPut = True;
+	SupportsGet = True;
+	SupportsDelete = False;
+	SupportsEnumeration = True;
+};
+
+
+// Registry property provider
+instance of __Win32Provider as $PropProv
+{
+	Name    ="RegPropProv" ;
+	ClsID   = "{72967901-68EC-11d0-B729-00AA0062CBB7}";
+	ImpersonationLevel = 1;
+	PerUserInitialization = "False";
+};
+
+instance of __PropertyProviderRegistration
+{
+	Provider     = $PropProv;
+	SupportsPut  = True;
+	SupportsGet  = True;
+};
+
+
+//==================================================================
+// ViaMonstra Information class and instance definition
+//==================================================================
+
+#pragma namespace ("\\\\.\\root\\cimv2")
+
+// Class definition
+
+#pragma deleteclass("ViaMonstra_Info",nofail)
+[DYNPROPS]
+class ViaMonstra_Info 
+{
+	[key]
+	string InstanceKey;
+	string ViaClass;
+	string ViaRole;
+	string ViaTag;
+	string ViaOwner;
+	
+};
+
+
+// Instance definition
+
+[DYNPROPS]
+instance of ViaMonstra_Info
+{
+	InstanceKey = "@";
+
+	[PropertyContext("local|HKEY_LOCAL_MACHINE\\Software\\ViaMonstra\\OSD|ViaClass"), Dynamic, Provider("RegPropProv")]
+	ViaClass;
+
+	[PropertyContext("local|HKEY_LOCAL_MACHINE\\Software\\ViaMonstra\\OSD|ViaRole"), Dynamic, Provider("RegPropProv")]
+	ViaRole;
+
+	[PropertyContext("local|HKEY_LOCAL_MACHINE\\Software\\ViaMonstra\\OSD|ViaTag"), Dynamic, Provider("RegPropProv")]
+	ViaTag;
+
+	[PropertyContext("local|HKEY_LOCAL_MACHINE\\Software\\ViaMonstra\\OSD|ViaOwner"), Dynamic, Provider("RegPropProv")]
+	ViaOwner;
+};

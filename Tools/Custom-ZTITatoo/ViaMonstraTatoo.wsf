@@ -1,0 +1,107 @@
+<job id="ViaMonstraTatoo">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // File:      ViaMonstraTatoo.wsf
+' // Version:   1.0
+' // Purpose:   Tattoo the machine with ViaMonstra info
+' // Usage:     cscript.exe [//nologo] ViaMonstraTatoo.wsf [/debug:true]
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+'//----------------------------------------------------------------------------
+'//  Global Constants
+'//----------------------------------------------------------------------------
+
+' No constants are required
+
+
+'//----------------------------------------------------------------------------
+'//  Main Class
+'//----------------------------------------------------------------------------
+
+Class ViaMonstraTatoo
+
+	'//----------------------------------------------------------------------------
+	'//  Class instance variable declarations
+	'//----------------------------------------------------------------------------
+
+	' No instance variables are required
+	
+
+	'//----------------------------------------------------------------------------
+	'//  Constructor to initialize needed global objects
+	'//----------------------------------------------------------------------------
+
+	Private Sub Class_Initialize
+
+		' No initialization is required
+
+	End Sub
+	
+	
+	'//----------------------------------------------------------------------------
+	'//  Main routine
+	'//----------------------------------------------------------------------------
+
+	Function Main
+
+		Dim iRetVal
+		Dim sMOFFile
+		Dim sCmd
+		Dim oInfo
+
+		iRetVal = Success
+
+		'//----------------------------------------------------------------------------
+		'//  Copy and compile the MOF
+		'//----------------------------------------------------------------------------
+
+		iRetVal = oUtility.FindFile("ViaMonstraTatoo.mof", sMOFFile)
+		If iRetVal <> Success then
+
+			oLogging.CreateEntry "Unable to find ViaMonstraTatoo.mof, information will not be available via WMI.", LogTypeInfo
+
+		Else
+
+			oLogging.CreateEntry "Copying " & sMOFFile & " to " & oEnv("WINDIR") & "\SYSTEM32\WBEM\ViaMonstraTatoo.mof.", LogTypeInfo
+			If oFSO.FileExists(oEnv("WINDIR") & "\SYSTEM32\WBEM\ViaMonstraTatoo.mof") then
+				oFSO.GetFile(oEnv("WINDIR") & "\SYSTEM32\WBEM\ViaMonstraTatoo.mof").Attributes = 0
+			End if
+			oFSO.CopyFile sMOFFile, oEnv("WINDIR") & "\SYSTEM32\WBEM\ViaMonstraTatoo.mof", true
+
+			sCmd = oEnv("WINDIR") & "\SYSTEM32\WBEM\MOFCOMP.EXE -autorecover " & oEnv("WINDIR") & "\SYSTEM32\WBEM\ViaMonstraTatoo.mof"
+			oLogging.CreateEntry "About to compile MOF: " & sCmd, LogTypeInfo
+			iRetVal = oShell.Run(sCmd, 0, true)
+			oLogging.CreateEntry "MOFCOMP return code = " & iRetVal, LogTypeInfo
+
+		End if
+
+		' Retrieve the new WMI instance
+
+		Set oInfo = objWMI.Get("ViaMonstra_Info.InstanceKey=""@""")
+
+		'//----------------------------------------------------------------------------
+		'//  Record Customdata
+		'//----------------------------------------------------------------------------
+
+		oInfo.ViaClass = oEnvironment.Item("ViaClass")
+		oInfo.ViaRole = oEnvironment.Item("ViaRole")
+		oInfo.ViaTag = oEnvironment.Item("ViaTag")
+		oInfo.ViaOwner = oEnvironment.Item("ViaOwner")
+		
+		' Save the changes
+
+		oInfo.Put_
+
+		Main = iRetVal
+
+	End Function
+
+End Class
+
+	</script>
+</job>
