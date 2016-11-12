@@ -361,28 +361,36 @@ Function ZTIProcess()
 				oLogging.CreateEntry sActionName & ": Running on Windows Server 2008 R2", LogTypeInfo
 				
 				'Copy cleanmgr.exe to System32
-				oLogging.CreateEntry sActionName & ": Copying cleanmgr.exe", LogTypeInfo
-				sExe = "C:\Windows\winsxs\amd64_microsoft-windows-cleanmgr_31bf3856ad364e35_6.1.7600.16385_none_c9392808773cd7da\cleanmgr.exe"
-				sFolder = "C:\Windows\System32\"
-					If not oFSO.FileExists(sExe) then
-				oLogging.CreateEntry sActionName & ": " & sExe & " was not found, unable to continue", LogTypeInfo
-					ZTIProcess = Failure
-					Exit Function
-					End if
-				oLogging.CreateEntry sActionName & ": Copy " & sExe & " To " & sFolder, LogTypeInfo	
-				oFSO.GetFile(sExe).Copy sFolder & oFSO.GetFileName(sExe),True	
+				If not oFSO.FileExists("C:\Windows\System32\cleanmgr.exe") then
+					oLogging.CreateEntry sActionName & ": Copying cleanmgr.exe", LogTypeInfo
+					sExe = "C:\Windows\winsxs\amd64_microsoft-windows-cleanmgr_31bf3856ad364e35_6.1.7600.16385_none_c9392808773cd7da\cleanmgr.exe"
+					sFolder = "C:\Windows\System32\"
+						If not oFSO.FileExists(sExe) then
+					oLogging.CreateEntry sActionName & ": " & sExe & " was not found, unable to continue", LogTypeInfo
+						ZTIProcess = Failure
+						Exit Function
+						End if
+					oLogging.CreateEntry sActionName & ": Copy " & sExe & " To " & sFolder, LogTypeInfo	
+					oFSO.GetFile(sExe).Copy sFolder & oFSO.GetFileName(sExe),True	
+				Else
+					oLogging.CreateEntry sActionName & ": No need to copy cleanmgr.exe from payload because it already exists at destination.", LogTypeInfo
+				End If
 
 				'Copy cleanmgr.exe.mui
-				oLogging.CreateEntry sActionName & ": Copying CleanMgr MUI", LogTypeInfo
-				sExe = "C:\Windows\winsxs\amd64_microsoft-windows-cleanmgr.resources_31bf3856ad364e35_6.1.7600.16385_en-us_b9cb6194b257cc63\cleanmgr.exe.mui"
-				sFolder = "C:\Windows\System32\en-US\"
-					If not oFSO.FileExists(sExe) then
-					oLogging.CreateEntry sActionName & ": " & sExe & " was not found, unable to continue", LogTypeInfo
-					ZTIProcess = Failure
-					Exit Function
-					End if
-				oLogging.CreateEntry sActionName & ": Copy " & sExe & " To " & sFolder, LogTypeInfo	
-				oFSO.GetFile(sExe).Copy sFolder & oFSO.GetFileName(sExe),True	
+				If not oFSO.FileExists("C:\Windows\System32\en-US\cleanmgr.exe.mui") then
+					oLogging.CreateEntry sActionName & ": Copying CleanMgr MUI", LogTypeInfo
+					sExe = "C:\Windows\winsxs\amd64_microsoft-windows-cleanmgr.resources_31bf3856ad364e35_6.1.7600.16385_en-us_b9cb6194b257cc63\cleanmgr.exe.mui"
+					sFolder = "C:\Windows\System32\en-US\"
+						If not oFSO.FileExists(sExe) then
+						oLogging.CreateEntry sActionName & ": " & sExe & " was not found, unable to continue", LogTypeInfo
+						ZTIProcess = Failure
+						Exit Function
+						End if
+					oLogging.CreateEntry sActionName & ": Copy " & sExe & " To " & sFolder, LogTypeInfo	
+					oFSO.GetFile(sExe).Copy sFolder & oFSO.GetFileName(sExe),True	
+				Else
+					oLogging.CreateEntry sActionName & ": No need to copy cleanmgr.exe.mui from payload because it already exists at destination.", LogTypeInfo
+				End If
 
 				'Add sagerun:5432 to registy
 				oLogging.CreateEntry sActionName & ": Adding reg values for CleanMgr", LogTypeInfo
