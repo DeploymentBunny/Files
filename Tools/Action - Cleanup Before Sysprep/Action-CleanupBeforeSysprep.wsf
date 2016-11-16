@@ -11,6 +11,8 @@
 '// Version: 2.2 - Dec 28 2015
 '// Version: 2.3 - Jan 24 2016
 '// Version: 2.4 - Feb 8 2016
+'// Version: 2.5 - Nov 11 2016 - Moved the DISM section /Resetbase for 10. Minor updates in remarks and text
+
 '// Mikael Nystrom & Johan Arwidmark
 '// This script is provided "AS IS" with no warranties, confers no rights and 
 '// is not supported by the authors, Deployment Bunny or Deployment Artists.
@@ -320,17 +322,6 @@ Function ZTIProcess()
 					ZTIProcess = Failure
 				End If
 
-				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
-				oLogging.CreateEntry sActionName & ": Running DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase", LogTypeInfo
-				iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
-				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
-
-				if (iRetVal = 0) or (iRetVal = 3010) then
-					ZTIProcess = Success 
-				Else 
-					ZTIProcess = Failure
-				End If
-				
 				'Execute CleanMgr.exe /sagerun:5432
 				oLogging.CreateEntry sActionName & ": Running CleanMgr.exe /sagerun:5432", LogTypeInfo
 				iRetVal = oUtility.RunWithConsoleLogging("CleanMgr.exe /sagerun:5432")
@@ -350,7 +341,18 @@ Function ZTIProcess()
 				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
 				oLogging.CreateEntry oUtility.ScriptName & ": Return code from command = " & iRetVal, LogTypeInfo
 				oLogging.CreateEntry oUtility.ScriptName & ": Finished", LogTypeInfo
-				
+
+				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
+				oLogging.CreateEntry sActionName & ": Running DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase", LogTypeInfo
+				iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
+				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+				if (iRetVal = 0) or (iRetVal = 3010) then
+					ZTIProcess = Success 
+				Else 
+					ZTIProcess = Failure
+				End If
+
 				End Select
 		Case "True"
 			'Server OS
@@ -504,23 +506,12 @@ Function ZTIProcess()
 				oLogging.CreateEntry oUtility.ScriptName & ": Finished", LogTypeInfo
 
 			Case "10."
-				' Windows Server "10"
+				' Windows Server 2016
 				oLogging.CreateEntry sActionName & ": Running on Windows Server Technical Preview", LogTypeInfo
 				
 				'Execute DISM.exe /online /Cleanup-Image /RestoreHealth
 				oLogging.CreateEntry sActionName & ": Running DISM.exe /online /Cleanup-Image /RestoreHealth", LogTypeInfo
 				iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /RestoreHealth")
-				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
-
-				if (iRetVal = 0) or (iRetVal = 3010) then
-					ZTIProcess = Success 
-				Else 
-					ZTIProcess = Failure
-				End If
-
-				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
-				oLogging.CreateEntry sActionName & ": Running DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase", LogTypeInfo
-				iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
 				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
 
 				if (iRetVal = 0) or (iRetVal = 3010) then
@@ -537,6 +528,17 @@ Function ZTIProcess()
 				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
 				oLogging.CreateEntry oUtility.ScriptName & ": Return code from command = " & iRetVal, LogTypeInfo
 				oLogging.CreateEntry oUtility.ScriptName & ": Finished", LogTypeInfo
+
+				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
+				oLogging.CreateEntry sActionName & ": Running DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase", LogTypeInfo
+				iRetVal = oUtility.RunWithConsoleLogging("DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase")
+				oLogging.CreateEntry sActionName & ": Done", LogTypeInfo	
+
+				if (iRetVal = 0) or (iRetVal = 3010) then
+					ZTIProcess = Success 
+				Else 
+					ZTIProcess = Failure
+				End If
 				
 				End Select
 
