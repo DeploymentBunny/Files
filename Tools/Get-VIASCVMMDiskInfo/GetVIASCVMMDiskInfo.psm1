@@ -1,9 +1,9 @@
-﻿Function Get-VIASCVMDiskInfo{
+﻿Function Get-VIASCVMMDiskInfo{
     <#
     .Synopsis
-        Get-VIASCVMDiskInfo is a function that gets virtual harddisks from SCVMM.
+        Get-VIASCVMMDiskInfo is a function that gets virtual harddisks from SCVMM.
     .DESCRIPTION
-        Get-VIASCVMDiskInfo is a function that gets virtual harddisks from SCVMM.
+        Get-VIASCVMMDiskInfo is a function that gets virtual harddisks from SCVMM.
         It presents:
             VMName
             VMhost
@@ -16,9 +16,9 @@
             VHDCurrentSize
             VHDExpandedInPercent
     .EXAMPLE
-        Get-VIASCVMDiskInfo -VMName SERVER01 | Out-GridView
+        Get-VIASCVMMDiskInfo -VMName SERVER01 | Out-GridView
     .EXAMPLE
-        Get-VIASCVMDiskInfo | Out-GridView
+        Get-VIASCVMMDiskInfo | Out-GridView
     .NOTES
         Created:	 2016-11-25
         Version:	 1.0
