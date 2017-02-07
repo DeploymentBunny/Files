@@ -13,6 +13,9 @@
 .LINK
     http://www.deploymentbunny.com
 #>
+Param(
+    $ComputerNames
+)
 Function Get-RemoteComputerSystemInfo{
     param(
         $ComputerName
@@ -43,7 +46,7 @@ Function Get-RemoteComputerSystemInfo{
 #Get the servers
 Write-Host "Getting Server names"
 Import-Module "ActiveDirectory"
-$Computers = Get-ADComputer -LDAPFilter "(&(objectCategory=computer)(name=SRV*)(operatingSystem=Windows Server*)(!serviceprincipalname=*MSClusterVirtualServer*)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))" 
+$Computers = Get-ADComputer -LDAPFilter "(&(objectCategory=computer)(name=$ComputerNames)(!serviceprincipalname=*MSClusterVirtualServer*)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))" 
 
 Write-Host "Found $($Computers.Count)"
 Write-Host "Check if they are online"
