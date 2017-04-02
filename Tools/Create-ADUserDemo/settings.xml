@@ -1,0 +1,14 @@
+﻿<Settings>
+ <Users>
+  <User Name="admminy">
+   <Active>False</Active>
+   <FirstName>Mikael</FirstName>
+   <LastName>Nyström</LastName>
+  </User>
+  <User Name="admmala">
+   <Active>True</Active>
+   <FirstName>Markus</FirstName>
+   <LastName>Lassfolk</LastName>
+  </User>
+ </Users>
+</Settings>
