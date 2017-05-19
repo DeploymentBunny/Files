@@ -507,7 +507,7 @@ Function ZTIProcess()
 
 			Case "10."
 				' Windows Server 2016
-				oLogging.CreateEntry sActionName & ": Running on Windows Server Technical Preview", LogTypeInfo
+				oLogging.CreateEntry sActionName & ": Running on Windows Server 2016", LogTypeInfo
 				
 				'Execute DISM.exe /online /Cleanup-Image /RestoreHealth
 				oLogging.CreateEntry sActionName & ": Running DISM.exe /online /Cleanup-Image /RestoreHealth", LogTypeInfo
