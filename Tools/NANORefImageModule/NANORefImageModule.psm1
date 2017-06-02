@@ -19,7 +19,8 @@
     #Get the WimFile and dismount ISO
     $Wimfile = "$($ISODrive):\NanoServer\NanoServer.wim"
     Write-Verbose "WIMFile is $Wimfile"
-    if((Test-Path $Wimfile) -eq $false){Write-Warning "Could not access $Wimfile, will break";BREAK}
+    if((Test-Path -Path $Wimfile) -eq $false){Write-Warning "Could not access $Wimfile, will break";BREAK}
+    
     Copy-Item -Path $Wimfile -Destination $WimFileSource -Force
     Set-ItemProperty -Path $WimFileSource -Name IsReadOnly -Value $false
     Copy-Item -Path $WimFileSource -Destination $WimFileDestination -Force
