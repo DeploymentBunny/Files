@@ -1,0 +1,32 @@
+<Models>
+ <Model Name="Virtual Machine">
+  <Windows7x86>True</Windows7x86>
+  <Windows8x86>True</Windows8x86>
+  <Windows81x86>True</Windows81x86>
+  <Windows10x86>True</Windows10x86>
+  <Windows7x64>True</Windows7x64>
+  <Windows8x64>True</Windows8x64>
+  <Windows81x64>True</Windows81x64>
+  <Windows10x64>True</Windows10x64>
+  <WindowsServer2008R2>True</WindowsServer2008R2>
+  <WindowsServer2012>True</WindowsServer2012>
+  <WindowsServer2012R2>True</WindowsServer2012R2>
+  <WindowsServer2016>True</WindowsServer2016>
+ </Model>
+ <Model Name="Surface Pro 4">
+  <Windows7x86>False</Windows7x86>
+  <Windows8x86>False</Windows8x86>
+  <Windows81x86>False</Windows81x86>
+  <Windows10x86>True</Windows10x86>
+  <Windows7x64>False</Windows7x64>
+  <Windows8x64>False</Windows8x64>
+  <Windows81x64>False</Windows81x64>
+  <Windows10x64>True</Windows10x64>
+  <WindowsServer2008R2>False</WindowsServer2008R2>
+  <WindowsServer2012>False</WindowsServer2012>
+  <WindowsServer2012R2>False</WindowsServer2012R2>
+  <WindowsServer2016>False</WindowsServer2016>
+ </Model>
+</Models>
+
+
