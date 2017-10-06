@@ -105,9 +105,9 @@
     </DownloadItem>
     <DownloadItem>
         <Comment></Comment>
-        <FullName>Microsoft Visual C++ 2013 Redistributable Package v12(x86)</FullName>
+        <FullName>Microsoft Visual C++ 2013 Redistributable Package (x86)</FullName>
         <ShortName>VS2013X86</ShortName>
-        <Source>http://download.microsoft.com/download/0/5/6/056DCDA9-D667-4E27-8001-8A0C6971D6B1/vcredist_x86.exe</Source>
+        <Source>http://download.microsoft.com/download/2/E/6/2E61CFA4-993B-4DD4-91DA-3737CD5CD6E3/vcredist_x86.exe</Source>
         <DestinationFolder>VS2013</DestinationFolder>
         <DestinationFile>vcredist_x86.exe</DestinationFile>
         <URL>http://www.microsoft.com</URL>
@@ -118,9 +118,9 @@
     </DownloadItem>
     <DownloadItem>
         <Comment></Comment>
-        <FullName>Microsoft Visual C++ 2013 Redistributable Package v12 (x64)</FullName>
+        <FullName>Microsoft Visual C++ 2013 Redistributable Package (x64)</FullName>
         <ShortName>VS2013X64</ShortName>
-        <Source>http://download.microsoft.com/download/0/5/6/056DCDA9-D667-4E27-8001-8A0C6971D6B1/vcredist_x64.exe</Source>
+        <Source>http://download.microsoft.com/download/2/E/6/2E61CFA4-993B-4DD4-91DA-3737CD5CD6E3/vcredist_x64.exe</Source>
         <DestinationFolder>VS2013</DestinationFolder>
         <DestinationFile>vcredist_x64.exe</DestinationFile>
         <URL>http://www.microsoft.com</URL>
@@ -131,9 +131,9 @@
     </DownloadItem>
     <DownloadItem>
         <Comment></Comment>
-        <FullName>Microsoft Visual C++ 2015 Redistributable Update 3 (x86)</FullName>
+        <FullName>Visual C++ Redistributable for Visual Studio 2015 (x86)</FullName>
         <ShortName>VS2015X86</ShortName>
-        <Source>https://download.microsoft.com/download/6/A/A/6AA4EDFF-645B-48C5-81CC-ED5963AEAD48/vc_redist.x86.exe</Source>
+        <Source>https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x86.exe</Source>
         <DestinationFolder>VS2015</DestinationFolder>
         <DestinationFile>vc_redist.x86.exe</DestinationFile>
         <URL>http://www.microsoft.com</URL>
@@ -144,10 +144,36 @@
     </DownloadItem>
     <DownloadItem>
         <Comment></Comment>
-        <FullName>Microsoft Visual C++ 2015 Redistributable Update 3 (x64)</FullName>
+        <FullName>Visual C++ Redistributable for Visual Studio 2015 (x64)</FullName>
         <ShortName>VS2015X64</ShortName>
-        <Source>https://download.microsoft.com/download/6/A/A/6AA4EDFF-645B-48C5-81CC-ED5963AEAD48/vc_redist.x64.exe</Source>
+        <Source>https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe</Source>
         <DestinationFolder>VS2015</DestinationFolder>
+        <DestinationFile>vc_redist.x64.exe</DestinationFile>
+        <URL>http://www.microsoft.com</URL>
+        <CommandType>NONE</CommandType>
+        <Command></Command>
+        <CommandLineSwitches></CommandLineSwitches>
+        <VerifyAfterCommand></VerifyAfterCommand>
+    </DownloadItem>
+    <DownloadItem>
+        <Comment></Comment>
+        <FullName>Visual C++ Redistributable for Visual Studio 2015 (x86)</FullName>
+        <ShortName>VS2017X86</ShortName>
+        <Source>https://go.microsoft.com/fwlink/?LinkId=746571</Source>
+        <DestinationFolder>VS2017</DestinationFolder>
+        <DestinationFile>vc_redist.x86.exe</DestinationFile>
+        <URL>http://www.microsoft.com</URL>
+        <CommandType>NONE</CommandType>
+        <Command></Command>
+        <CommandLineSwitches></CommandLineSwitches>
+        <VerifyAfterCommand></VerifyAfterCommand>
+    </DownloadItem>
+    <DownloadItem>
+        <Comment></Comment>
+        <FullName>Visual C++ Redistributable for Visual Studio 2017 (x64)</FullName>
+        <ShortName>VS2017X64</ShortName>
+        <Source>https://go.microsoft.com/fwlink/?LinkId=746572</Source>
+        <DestinationFolder>VS2017</DestinationFolder>
         <DestinationFile>vc_redist.x64.exe</DestinationFile>
         <URL>http://www.microsoft.com</URL>
         <CommandType>NONE</CommandType>
