@@ -1,30 +1,5 @@
-﻿<Download>
+<Download>
     <DownloadItem>
-        <Comment></Comment>
-        <FullName>Microsoft Visual C++ 2005 SP1 Redistributable Package (x86)</FullName>
-        <ShortName>VS2005X86SP1</ShortName>
-        <Source>http://download.microsoft.com/download/8/B/4/8B42259F-5D70-43F4-AC2E-4B208FD8D66A/vcredist_x86.EXE</Source>
-        <DestinationFolder>VS2005</DestinationFolder>
-        <DestinationFile>vcredist_x86.exe</DestinationFile>
-        <URL>http://www.microsoft.com</URL>
-        <CommandType>NONE</CommandType>
-        <Command></Command>
-        <CommandLineSwitches></CommandLineSwitches>
-        <VerifyAfterCommand></VerifyAfterCommand>
-    </DownloadItem>
-    <DownloadItem>
-        <Comment></Comment>
-        <FullName>Microsoft Visual C++ 2005 SP1 Redistributable Package (x64)</FullName>
-        <ShortName>VS2005X64SP1</ShortName>
-        <Source>http://download.microsoft.com/download/8/B/4/8B42259F-5D70-43F4-AC2E-4B208FD8D66A/vcredist_x64.EXE</Source>
-        <DestinationFolder>VS2005</DestinationFolder>
-        <DestinationFile>vcredist_x64.exe</DestinationFile>
-        <URL>http://www.microsoft.com</URL>
-        <CommandType>NONE</CommandType>
-        <Command></Command>
-        <CommandLineSwitches></CommandLineSwitches>
-        <VerifyAfterCommand></VerifyAfterCommand>
-    </DownloadItem>
     <DownloadItem>
         <Comment></Comment>
         <FullName>Microsoft Visual C++ 2008 SP1 Redistributable Package (x86)</FullName>
@@ -131,33 +106,7 @@
     </DownloadItem>
     <DownloadItem>
         <Comment></Comment>
-        <FullName>Visual C++ Redistributable for Visual Studio 2015 (x86)</FullName>
-        <ShortName>VS2015X86</ShortName>
-        <Source>https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x86.exe</Source>
-        <DestinationFolder>VS2015</DestinationFolder>
-        <DestinationFile>vc_redist.x86.exe</DestinationFile>
-        <URL>http://www.microsoft.com</URL>
-        <CommandType>NONE</CommandType>
-        <Command></Command>
-        <CommandLineSwitches></CommandLineSwitches>
-        <VerifyAfterCommand></VerifyAfterCommand>
-    </DownloadItem>
-    <DownloadItem>
-        <Comment></Comment>
-        <FullName>Visual C++ Redistributable for Visual Studio 2015 (x64)</FullName>
-        <ShortName>VS2015X64</ShortName>
-        <Source>https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe</Source>
-        <DestinationFolder>VS2015</DestinationFolder>
-        <DestinationFile>vc_redist.x64.exe</DestinationFile>
-        <URL>http://www.microsoft.com</URL>
-        <CommandType>NONE</CommandType>
-        <Command></Command>
-        <CommandLineSwitches></CommandLineSwitches>
-        <VerifyAfterCommand></VerifyAfterCommand>
-    </DownloadItem>
-    <DownloadItem>
-        <Comment></Comment>
-        <FullName>Visual C++ Redistributable for Visual Studio 2015 (x86)</FullName>
+        <FullName>Visual C++ Redistributable for Visual Studio 2017 (x86)</FullName>
         <ShortName>VS2017X86</ShortName>
         <Source>https://go.microsoft.com/fwlink/?LinkId=746571</Source>
         <DestinationFolder>VS2017</DestinationFolder>
