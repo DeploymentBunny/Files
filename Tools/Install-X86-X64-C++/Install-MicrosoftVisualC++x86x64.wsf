@@ -59,6 +59,12 @@ Function ZTIProcess()
 	sArguments = "/Q"
 
 	'Checking for x86 files
+	If not oFSO.FileExists(sSetupFile2008x86) then
+		oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2008x86 & " was not found, unable to install", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
 	If not oFSO.FileExists(sSetupFile2010x86) then
 		oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2010x86 & " was not found, unable to install", LogTypeError
 		ZTIProcess = Failure
@@ -173,7 +179,7 @@ Function ZTIProcess()
 			Exit Function
 		End if
 
-		If not oFSO.FileExists(sSetupFile2015x64) then
+		If not oFSO.FileExists(sSetupFile2017x64) then
 			oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2017x64 & " was not found, unable to install", LogTypeError
 			ZTIProcess = Failure
 			Exit Function
