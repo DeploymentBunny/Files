@@ -14,7 +14,7 @@
     http://www.deploymentbunny.com
 #>
 $getForest = [system.directoryservices.activedirectory.Forest]::GetCurrentForest()
-$DCServers = $getForest.domains | ForEach-Object {$_.DomainControllers} | ForEach-Object {$_.Name} 
+$DCServers = $getForest.Domains.DomainControllers.name
 
 foreach ($DCServer in $DCServers){
     Write-Host "Checking netaccess to $DCServer" -ForegroundColor Green

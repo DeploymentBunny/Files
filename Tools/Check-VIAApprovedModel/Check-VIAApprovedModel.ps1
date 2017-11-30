@@ -1,8 +1,9 @@
 Param(
-    $XMLFile = 'http://localhost/ApprovedModelList/VIAApprovedModel.xml',
     $Model = 'Surface Pro 4',
     $OperatingSystem = 'Windows10x64'
 )
+
+$XMLFile = 'http://demohost03/ApprovedModelList/VIAApprovedModel.xml'
 
 Function Check-VIAApprovedModel{
     Param(
