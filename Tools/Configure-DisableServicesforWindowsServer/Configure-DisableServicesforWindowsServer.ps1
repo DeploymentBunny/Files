@@ -1,2 +1,6 @@
-#For Windows Server 2016 TP4 UI
-Get-Service -Name MapsBroker | Set-Service -StartupType Disabled
+$Services = 'CDPUserSvc','MapsBroker','PcaSvc','ShellHWDetection','OneSyncSvc','WpnService'
+
+foreach($Service in $Services){
+    Stop-Service -Name $Service -PassThru -Verbose | Set-Service -StartupType Disabled -Verbose
+}
+

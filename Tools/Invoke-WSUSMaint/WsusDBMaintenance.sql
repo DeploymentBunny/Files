@@ -1,9 +1,9 @@
 /******************************************************************************
 This sample T-SQL script performs basic maintenance tasks on SUSDB
 1. Identifies indexes that are fragmented and defragments them. For certain
-Â Â  tables, a fill-factor is set in order to improve insert performance.
-Â Â  Based on MSDN sample at http://msdn2.microsoft.com/en-us/library/ms188917.aspx
-Â Â  and tailored for SUSDB requirements
+   tables, a fill-factor is set in order to improve insert performance.
+   Based on MSDN sample at http://msdn2.microsoft.com/en-us/library/ms188917.aspx
+   and tailored for SUSDB requirements
 2. Updates potentially out-of-date table statistics.
 ******************************************************************************/
 
@@ -14,11 +14,11 @@ SET QUOTED_IDENTIFIER ON;
 
 -- Rebuild or reorganize indexes based on their fragmentation levels
 DECLARE @work_to_do TABLE (
-Â Â Â  objectid int
-Â Â Â  , indexid int
-Â Â Â  , pagedensity float
-Â Â Â  , fragmentation float
-Â Â Â  , numrows int
+    objectid int
+    , indexid int
+    , pagedensity float
+    , fragmentation float
+    , numrows int
 )
 
 DECLARE @objectid int;
@@ -39,17 +39,17 @@ DECLARE @numpages int
 PRINT 'Estimating fragmentation: Begin. ' + convert(nvarchar, getdate(), 121) 
 INSERT @work_to_do
 SELECT
-Â Â Â  f.object_id
-Â Â Â  , index_id
-Â Â Â  , avg_page_space_used_in_percent
-Â Â Â  , avg_fragmentation_in_percent
-Â Â Â  , record_count
+    f.object_id
+    , index_id
+    , avg_page_space_used_in_percent
+    , avg_fragmentation_in_percent
+    , record_count
 FROM 
-Â Â Â  sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL , NULL, 'SAMPLED') AS f
+    sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL , NULL, 'SAMPLED') AS f
 WHERE
-Â Â Â  (f.avg_page_space_used_in_percent < 85.0 and f.avg_page_space_used_in_percent/100.0 * page_count < page_count - 1)
-Â Â Â  or (f.page_count > 50 and f.avg_fragmentation_in_percent > 15.0)
-Â Â Â  or (f.page_count > 10 and f.avg_fragmentation_in_percent > 80.0)
+    (f.avg_page_space_used_in_percent < 85.0 and f.avg_page_space_used_in_percent/100.0 * page_count < page_count - 1)
+    or (f.page_count > 50 and f.avg_fragmentation_in_percent > 15.0)
+    or (f.page_count > 10 and f.avg_fragmentation_in_percent > 80.0)
 
 PRINT 'Number of indexes to rebuild: ' + cast(@@ROWCOUNT as nvarchar(20))
 
@@ -57,9 +57,9 @@ PRINT 'Estimating fragmentation: End. ' + convert(nvarchar, getdate(), 121)
 
 SELECT @numpages = sum(ps.used_page_count)
 FROM
-Â Â Â  @work_to_do AS fi
-Â Â Â  INNER JOIN sys.indexes AS i ON fi.objectid = i.object_id and fi.indexid = i.index_id
-Â Â Â  INNER JOIN sys.dm_db_partition_stats AS ps on i.object_id = ps.object_id and i.index_id = ps.index_id
+    @work_to_do AS fi
+    INNER JOIN sys.indexes AS i ON fi.objectid = i.object_id and fi.indexid = i.index_id
+    INNER JOIN sys.dm_db_partition_stats AS ps on i.object_id = ps.object_id and i.index_id = ps.index_id
 
 -- Declare the cursor for the list of indexes to be processed.
 DECLARE curIndexes CURSOR FOR SELECT * FROM @work_to_do
@@ -70,36 +70,36 @@ OPEN curIndexes
 -- Loop through the indexes
 WHILE (1=1)
 BEGIN
-Â Â Â  FETCH NEXT FROM curIndexes
-Â Â Â  INTO @objectid, @indexid, @density, @fragmentation, @numrows;
-Â Â Â  IF @@FETCH_STATUS < 0 BREAK;
+    FETCH NEXT FROM curIndexes
+    INTO @objectid, @indexid, @density, @fragmentation, @numrows;
+    IF @@FETCH_STATUS < 0 BREAK;
 
-Â Â Â  SELECT 
-Â Â Â Â Â Â Â  @objectname = QUOTENAME(o.name)
-Â Â Â Â Â Â Â  , @schemaname = QUOTENAME(s.name)
-Â Â Â  FROM 
-Â Â Â Â Â Â Â  sys.objects AS o
-Â Â Â Â Â Â Â  INNER JOIN sys.schemas as s ON s.schema_id = o.schema_id
-Â Â Â  WHERE 
-Â Â Â Â Â Â Â  o.object_id = @objectid;
+    SELECT 
+        @objectname = QUOTENAME(o.name)
+        , @schemaname = QUOTENAME(s.name)
+    FROM 
+        sys.objects AS o
+        INNER JOIN sys.schemas as s ON s.schema_id = o.schema_id
+    WHERE 
+        o.object_id = @objectid;
 
-Â Â Â  SELECT 
-Â Â Â Â Â Â Â  @indexname = QUOTENAME(name)
-Â Â Â Â Â Â Â  , @fillfactorset = CASE fill_factor WHEN 0 THEN 0 ELSE 1 END
-Â Â Â  FROM 
-Â Â Â Â Â Â Â  sys.indexes
-Â Â Â  WHERE
-Â Â Â Â Â Â Â  object_id = @objectid AND index_id = @indexid;
+    SELECT 
+        @indexname = QUOTENAME(name)
+        , @fillfactorset = CASE fill_factor WHEN 0 THEN 0 ELSE 1 END
+    FROM 
+        sys.indexes
+    WHERE
+        object_id = @objectid AND index_id = @indexid;
 
-Â Â Â  IF ((@density BETWEEN 75.0 AND 85.0) AND @fillfactorset = 1) OR (@fragmentation < 30.0)
-Â Â Â Â Â Â Â  SET @command = N'ALTER INDEX ' + @indexname + N' ON ' + @schemaname + N'.' + @objectname + N' REORGANIZE';
-Â Â Â  ELSE IF @numrows >= 5000 AND @fillfactorset = 0
-Â Â Â Â Â Â Â  SET @command = N'ALTER INDEX ' + @indexname + N' ON ' + @schemaname + N'.' + @objectname + N' REBUILD WITH (FILLFACTOR = 90)';
-Â Â Â  ELSE
-Â Â Â Â Â Â Â  SET @command = N'ALTER INDEX ' + @indexname + N' ON ' + @schemaname + N'.' + @objectname + N' REBUILD';
-Â Â Â  PRINT convert(nvarchar, getdate(), 121) + N' Executing: ' + @command;
-Â Â Â  EXEC (@command);
-Â Â Â  PRINT convert(nvarchar, getdate(), 121) + N' Done.';
+    IF ((@density BETWEEN 75.0 AND 85.0) AND @fillfactorset = 1) OR (@fragmentation < 30.0)
+        SET @command = N'ALTER INDEX ' + @indexname + N' ON ' + @schemaname + N'.' + @objectname + N' REORGANIZE';
+    ELSE IF @numrows >= 5000 AND @fillfactorset = 0
+        SET @command = N'ALTER INDEX ' + @indexname + N' ON ' + @schemaname + N'.' + @objectname + N' REBUILD WITH (FILLFACTOR = 90)';
+    ELSE
+        SET @command = N'ALTER INDEX ' + @indexname + N' ON ' + @schemaname + N'.' + @objectname + N' REBUILD';
+    PRINT convert(nvarchar, getdate(), 121) + N' Executing: ' + @command;
+    EXEC (@command);
+    PRINT convert(nvarchar, getdate(), 121) + N' Done.';
 END
 
 -- Close and deallocate the cursor.
@@ -109,14 +109,14 @@ DEALLOCATE curIndexes;
 
 IF EXISTS (SELECT * FROM @work_to_do)
 BEGIN
-Â Â Â  PRINT 'Estimated number of pages in fragmented indexes: ' + cast(@numpages as nvarchar(20))
-Â Â Â  SELECT @numpages = @numpages - sum(ps.used_page_count)
-Â Â Â  FROM
-Â Â Â Â Â Â Â  @work_to_do AS fi
-Â Â Â Â Â Â Â  INNER JOIN sys.indexes AS i ON fi.objectid = i.object_id and fi.indexid = i.index_id
-Â Â Â Â Â Â Â  INNER JOIN sys.dm_db_partition_stats AS ps on i.object_id = ps.object_id and i.index_id = ps.index_id
+    PRINT 'Estimated number of pages in fragmented indexes: ' + cast(@numpages as nvarchar(20))
+    SELECT @numpages = @numpages - sum(ps.used_page_count)
+    FROM
+        @work_to_do AS fi
+        INNER JOIN sys.indexes AS i ON fi.objectid = i.object_id and fi.indexid = i.index_id
+        INNER JOIN sys.dm_db_partition_stats AS ps on i.object_id = ps.object_id and i.index_id = ps.index_id
 
-Â Â Â  PRINT 'Estimated number of pages freed: ' + cast(@numpages as nvarchar(20))
+    PRINT 'Estimated number of pages freed: ' + cast(@numpages as nvarchar(20))
 END
 GO
 

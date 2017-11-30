@@ -17,6 +17,7 @@
     Release notes
     1.0 - Initial release (Peter Lofgren)
     1.1 - Change from netsh.exe to native Powershell (Mikael Nystrom)
+    1.2 - Change from blocking the machine, to block AppxSvc
 #>
  
 param (
@@ -25,11 +26,11 @@ param (
 )
  
 If (!$Disable) {
-  Write-Output "Adding internet block"
-  New-NetFirewallRule -DisplayName "Block Outgoing 80, 443" -Enabled True -Direction Outbound -Profile Any -Action Block -Protocol TCP -RemotePort 80,443
+  Write-Output "Adding internet block for AppXSvc"
+  New-NetFirewallRule -DisplayName "Block Outgoing 80, 443 for AppXSvc" -Enabled True -Direction Outbound -Profile Any -Action Block -Protocol TCP -RemotePort 80,443 -Service AppXSvc
 }
  
 if ($Disable) {
-  Write-Output "Removing internet block"
-  Get-NetFirewallRule -DisplayName "Block Outgoing 80, 443" | Remove-NetFirewallRule
+  Write-Output "Adding internet block for AppXSvc"
+  Get-NetFirewallRule -DisplayName "Block Outgoing 80, 443 AppXSvc" | Remove-NetFirewallRule
 }
