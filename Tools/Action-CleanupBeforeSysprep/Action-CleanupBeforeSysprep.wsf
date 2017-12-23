@@ -117,6 +117,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Cleaning up the SoftwareDistribution folder
@@ -171,6 +172,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
@@ -182,6 +184,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Execute CleanMgr.exe
@@ -193,6 +196,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Cleaning up the SoftwareDistribution folder
@@ -242,6 +246,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
@@ -253,6 +258,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 				
 				'Execute CleanMgr.exe
@@ -264,6 +270,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 				'Cleaning up the SoftwareDistribution folder
 				oLogging.CreateEntry sActionName & ": Cleaning up the SoftwareDistribution folder", LogTypeInfo
@@ -320,6 +327,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Execute CleanMgr.exe /sagerun:5432
@@ -331,6 +339,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Cleaning up the SoftwareDistribution folder
@@ -351,6 +360,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				End Select
@@ -424,6 +434,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 				
 				'Cleaning up the SoftwareDistribution folder
@@ -448,6 +459,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
@@ -459,6 +471,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 				
 				'Cleaning up the SoftwareDistribution folder
@@ -483,6 +496,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Execute DISM.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
@@ -494,6 +508,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 
 				'Cleaning up the SoftwareDistribution folder
@@ -518,6 +533,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 				
 				'Cleaning up the SoftwareDistribution folder
@@ -538,6 +554,7 @@ Function ZTIProcess()
 					ZTIProcess = Success 
 				Else 
 					ZTIProcess = Failure
+					Exit Function
 				End If
 				
 				End Select
