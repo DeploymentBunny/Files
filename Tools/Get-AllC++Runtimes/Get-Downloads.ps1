@@ -1,16 +1,16 @@
 <#
  ##################################################################################
- #  Script name: DownloadAll.ps1
- #  Created:		2012-12-26
- #  version:		v1.0
+ #  Script name: DownloadAllVC++.ps1
+ #  Created:     2012-12-26
+ #  version:     v1.0
  #  Author:      Mikael Nystrom
- #  Homepage:    http://deploymentbunny.com/
+ #  Homepage:    https://deploymentbunny.com/2014/08/05/powershell-is-king-download-all-vc-runtimes-using-a-script/
  ##################################################################################
- 
+
  ##################################################################################
  #  Disclaimer:
  #  -----------
- #  This script is provided "AS IS" with no warranties, confers no rights and 
+ #  This script is provided "AS IS" with no warranties, confers no rights and
  #  is not supported by the authors or DeploymentBunny.
  ##################################################################################
 #>
@@ -108,7 +108,7 @@ foreach($DataRecord in $Data.Download.DownloadItem){
             else
         {
             Logit "$FullName needs to be fixed."
-            #Selecting correct method to extract data 
+            #Selecting correct method to extract data
             Switch($CommandType){
                 EXEType01{
                     $Command = $DestinationFolder + "\" + $Command
