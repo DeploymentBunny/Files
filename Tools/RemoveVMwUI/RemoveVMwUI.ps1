@@ -1,9 +1,21 @@
 ﻿<#
- # This script will give you the option to change the SKU.
- # The script detects the Server OS version and present a list of other SKU's that the current version can be converted into
- # Version 2.0
- # Added Selfelevating : Script "borrowed" from Ben Armstrong - https://blogs.msdn.microsoft.com/virtual_pc_guy/2010/09/23/a-self-elevating-powershell-script/
- # Added support for Windows Server 2016
+.Synopsis
+    RemoveVMwUI will remove selected virtual machines, including datafiles and folder
+.DESCRIPTION
+    RemoveVMwUI will remove selected virtual machines, including datafiles and folder, forever, without any questions
+.EXAMPLE
+    RemoveVMwUI
+.NOTES
+    This script will give you the option to remove virtual machines running on Hyper-V, including all data files, even if they are running
+    Selfelevating Script "borrowed" from Ben Armstrong - https://blogs.msdn.microsoft.com/virtual_pc_guy/2010/09/23/a-self-elevating-powershell-script/
+    FileName:    RemoveVMwUI.ps1 
+    Author:      Mikael Nystrom
+    Contact:     mikael.nystrom@truesec.se
+    Created:     2018-09-21
+    web:         http://www.deploymentbunny.com
+.FUNCTIONALITY
+    The script will check if you are elevated or not, if not it will elevate you. It will then use get-vm to get all VMs, present in a dialogbox, where you can select vm's
+    it will then find out locations of resources used ny the vm, including the folder and then remove all of it, if the vm is running it will be stopped and then deleted.
 #>
 
 # Get the ID and security principal of the current user account
