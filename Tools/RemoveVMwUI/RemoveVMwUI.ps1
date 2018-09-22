@@ -12,6 +12,8 @@
     Author:      Mikael Nystrom
     Contact:     mikael.nystrom@truesec.se
     Created:     2018-09-21
+    Updated:     2018-09-23
+                 Added code to remove VM's with snapshot without the need of waiting for the merge process
     web:         http://www.deploymentbunny.com
 .FUNCTIONALITY
     The script will check if you are elevated or not, if not it will elevate you. It will then use get-vm to get all VMs, present in a dialogbox, where you can select vm's
@@ -156,6 +158,25 @@ $objForm.Controls.Add($objLabel)
 $objForm.Add_Shown({$objForm.Activate()})
 [void] $objForm.ShowDialog()
 
+Function Remove-TSxSnapShot{
+    Param(
+        $VMName
+    )
+    If((Get-VM | Where-Object Name -EQ $VMName).count -eq 0){
+        Write-Warning "Could not find $vmname"
+        Break
+    }else{
+        If((Get-VM -Name $VMName | Get-VMSnapshot).count -eq 0){
+            Write-Warning "$vmname does not have any snapshots, nothing to do for me..."
+        }else{
+            Get-VMSnapshot -VMName $VMName | Where-Object ParentCheckpointName -EQ $null| Restore-VMSnapshot -Confirm:$false
+            Remove-VMSnapshot -VMName $VMName
+            do{Start-Sleep -Seconds 1}
+            until((Get-VM -Name $VMName | Get-VMSnapshot).count -eq 0)
+        }
+    }
+}
+
 Function Remove-VIAVM
 {
 <#
@@ -186,6 +207,11 @@ Function Remove-VIAVM
                 Write-Verbose "Stopping $Item"
                 Get-VM -Id $Item.Id | Stop-VM -Force -TurnOff
             }
+            
+            If((Get-VM -Name $VMName | Get-VMSnapshot).count -ne 0){
+                Remove-TSxSnapShot -VMName $VMName
+            }
+
             $Disks = Get-VMHardDiskDrive -VM $Item
             foreach ($Disk in $Disks){
                 Write-Verbose "Removing $($Disk.Path)"
@@ -199,6 +225,7 @@ Function Remove-VIAVM
         }
     }
 }
+
 foreach($Selection in $Selections){
     Remove-VIAVM -VMName $Selection
 }
