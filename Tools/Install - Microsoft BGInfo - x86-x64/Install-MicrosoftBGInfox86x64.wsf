@@ -1,0 +1,85 @@
+<job id="Install-BGInfo">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+'//----------------------------------------------------------------------------
+'// Purpose: Used to install BGInfo 
+'// Usage: cscript Install-MicrosoftBGInfox86x64.wsf [/debug:true]
+'// Version: 1.2 - 12 Dec 2013 - Johan Arwidmark
+'//
+'// This script is provided "AS IS" with no warranties, confers no rights and 
+'// is not supported by the authors or Deployment Artist. 
+'//----------------------------------------------------------------------------
+
+Option Explicit 
+Dim iRetVal 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	oLogging.CreateEntry oUtility.ScriptName & ": Starting installation", LogTypeInfo
+
+    Dim sSetupFile
+    Dim sFolder
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 		
+
+    ' Copy Bginfo.lnk to All Users Startup Folder
+	sSetupFile = oUtility.ScriptDir & "\Source\Bginfo.lnk"
+    sFolder = oShell.SpecialFolders("AllUsersStartup") & "\"
+    If not oFSO.FileExists(sSetupFile) then
+        oLogging.CreateEntry "Install-BGInfo: " & sSetupFile & " was not found, unable to install BGInfo", LogTypeInfo
+        ZTIProcess = Failure
+		Exit Function
+	End if
+    oFSO.GetFile(sSetupFile).Copy sFolder & oFSO.GetFileName(sSetupFile),True	
+
+    ' Create the C:\Program Files\BGInfo folder
+    sFolder = "C:\Program Files\BGInfo\"
+    oFSO.CreateFolder sFolder
+
+    ' Copy Custom.bgi to C:\Program Files\BGInfo
+	sSetupFile = oUtility.ScriptDir & "\Source\Custom.bgi"
+    If not oFSO.FileExists(sSetupFile) then
+        oLogging.CreateEntry "Install-BGInfo: " & sSetupFile & " was not found, unable to install BGInfo", LogTypeInfo
+        ZTIProcess = Failure
+		Exit Function
+	End if
+    oFSO.GetFile(sSetupFile).Copy sFolder & oFSO.GetFileName(sSetupFile),True	
+
+    ' Copy CustomBginfo.exe to C:\Program Files\BGInfo
+   	sSetupFile = oUtility.ScriptDir & "\Source\Bginfo.exe"
+    If not oFSO.FileExists(sSetupFile) then
+        oLogging.CreateEntry "Install-BGInfo: " & sSetupFile & " was not found, unable to install BGInfo", LogTypeInfo
+        ZTIProcess = Failure
+		Exit Function
+	End if
+    oFSO.GetFile(sSetupFile).Copy sFolder & oFSO.GetFileName(sSetupFile),True	
+
+   	' Run BGInfo
+   	'sSetupFile = "C:\Program Files\BGInfo\Bginfo.exe"
+    'If not oFSO.FileExists(sSetupFile) then
+    '    oLogging.CreateEntry "Install-BGInfo: " & sSetupFile & " was not found, unable to run BGInfo", LogTypeInfo
+    '    ZTIProcess = Failure
+	'		Exit Function
+	'End if
+	'iRetVal = oShell.Run("""" & sSetupFile & """ ""C:\Program Files\BGInfo\Custom.bgi"" /timer:0 /silent /nolicprompt", 0, True)
+		
+	'/// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	
+	oLogging.CreateEntry oUtility.ScriptName & ": Return code from command = " & iRetVal, LogTypeInfo
+	oLogging.CreateEntry oUtility.ScriptName & ": Finished installation", LogTypeInfo
+	
+End Function 
+
+</script>
+</job>
