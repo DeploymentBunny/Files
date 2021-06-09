@@ -263,7 +263,27 @@ Function Inventory-Computer{
             $UpgradeSelection01 = "Unable to upgrade current edition"
             $UpgradeSelection02 = "NA"
             }
-        Default{
+        'Microsoft Windows Server 2019 Standard'{
+            Write-Verbose $CurrentWinCaption.Caption
+            $UpgradeSelection01 = "Microsoft Windows Server 2019 Datacenter"
+            $UpgradeSelection02 = "NA"
+            }
+        'Microsoft Windows Server 2019 Standard Evaluation'{
+            Write-Verbose $CurrentWinCaption.Caption
+            $UpgradeSelection01 = "Microsoft Windows Server 2019 Standard"
+            $UpgradeSelection02 = "Microsoft Windows Server 2019 Datacenter"
+            }
+        'Microsoft Windows Server 2019 Datacenter Evaluation'{
+            Write-Verbose $CurrentWinCaption.Caption
+            $UpgradeSelection01 = "Upgrade to Microsoft Windows Server 2019 Datacenter"
+            $UpgradeSelection02 = "NA"
+            }
+        'Microsoft Windows Server 2019 Datacenter'{
+            Write-Verbose $CurrentWinCaption.Caption
+            $UpgradeSelection01 = "Unable to upgrade current edition"
+            $UpgradeSelection02 = "NA"
+            }
+			Default{
             Write-Verbose "Unable to upgrade"
             $UpgradeSelection01 = "Unable To Upgrade"
             $UpgradeSelection02 = "NA"
@@ -360,7 +380,7 @@ Function Upgrade-SKU{
         'Microsoft Windows Server 2016 Standard Evaluation'{
             Write-Verbose $CurrentWinCaption.Caption
             if ($x -eq 'Microsoft Windows Server 2016 Standard'){
-				$UpgradeToWinEditionPID = "WC2BQ-8NRM3-FDDYY-2BFGV-KHKQY"
+				$UpgradeToWinEditionPID = "N69G4-B89J2-4G8F4-WWYCC-J464C"
 				$CMD = "DISM.exe /Online /Set-Edition:ServerStandard /ProductKey:$UpgradeToWinEditionPID /AcceptEula /NoRestart"
                 }
             if ($x -eq 'Microsoft Windows Server 2016 Datacenter'){
@@ -378,13 +398,34 @@ Function Upgrade-SKU{
         'Microsoft Windows Server 2016 Datacenter'{
             Write-Verbose $CurrentWinCaption.Caption
             }
-        Default {
+        'Microsoft Windows Server 2019 Standard Evaluation'{
+            Write-Verbose $CurrentWinCaption.Caption
+            if ($x -eq 'Microsoft Windows Server 2019 Standard'){
+				$UpgradeToWinEditionPID = "N69G4-B89J2-4G8F4-WWYCC-J464C"
+				$CMD = "DISM.exe /Online /Set-Edition:ServerStandard /ProductKey:$UpgradeToWinEditionPID /AcceptEula /NoRestart"
+                }
+            if ($x -eq 'Microsoft Windows Server 2019 Datacenter'){
+				$UpgradeToWinEditionPID = "WMDGN-G9PQG-XVVXX-R3X43-63DFG"
+				$CMD = "DISM.exe /Online /Set-Edition:ServerDataCenter /ProductKey:$UpgradeToWinEditionPID /AcceptEula /NoRestart"
+                }
+            }
+        'Microsoft Windows Server 2019 Datacenter Evaluation'{
+            Write-Verbose $CurrentWinCaption.Caption
+            if ($x -eq 'Microsoft Windows Server 2019 Datacenter'){
+				$UpgradeToWinEditionPID = "WMDGN-G9PQG-XVVXX-R3X43-63DFG"
+				$CMD = "DISM.exe /Online /Set-Edition:ServerDataCenter /ProductKey:$UpgradeToWinEditionPID /AcceptEula /NoRestart"
+                }
+            }
+        'Microsoft Windows Server 2019 Datacenter'{
+            Write-Verbose $CurrentWinCaption.Caption
+            }
+			Default {
             Write-Verbose "Unable to upgrade."
             }
         }
 }
 
-#Set retunr from forms to Zero
+#Set return from forms to Zero
 $x = ""
 $CMD = ""
 
@@ -397,7 +438,7 @@ $CMD = ""
 #Set the return value to $X
 $X = $objListBox.SelectedItem
 
-#Find out what actully is being done here
+#Find out what actually is being done here
 . Upgrade-SKU
 
 #Show the result of the selection and the command that will run
@@ -411,7 +452,7 @@ If($CMD -ne ""){
 
 #Hold it for a sec...
 if ($LastExitCode -eq '3010'){
-    Write-Output "Reboot nedeed"
+    Write-Output "Reboot needed"
     . Show-BoxReboot
     }
 Start-Sleep 5
