@@ -398,7 +398,14 @@ Function Upgrade-SKU{
         'Microsoft Windows Server 2016 Datacenter'{
             Write-Verbose $CurrentWinCaption.Caption
             }
-        'Microsoft Windows Server 2019 Standard Evaluation'{
+        'Microsoft Windows Server 2019 Standard'{
+            Write-Verbose $CurrentWinCaption.Caption
+            if ($x -eq 'Microsoft Windows Server 2019 Datacenter'){
+				$UpgradeToWinEditionPID = "WMDGN-G9PQG-XVVXX-R3X43-63DFG"
+				$CMD = "DISM.exe /Online /Set-Edition:ServerDataCenter /ProductKey:$UpgradeToWinEditionPID /AcceptEula /NoRestart"
+                }
+            }
+		'Microsoft Windows Server 2019 Standard Evaluation'{
             Write-Verbose $CurrentWinCaption.Caption
             if ($x -eq 'Microsoft Windows Server 2019 Standard'){
 				$UpgradeToWinEditionPID = "N69G4-B89J2-4G8F4-WWYCC-J464C"
