@@ -26,21 +26,14 @@
   Overwrites the file without asking.
 
 .NOTES
-  Version:        1.2
-  Author:         Mattias Benninge
-  Creation Date:  2020-07-01
+  Version:        1.0
+  Author:         Mikael Nystrom
+  Creation Date:  2021-12-16
 
   Version history:
+  (Based on the script from Mattias Benninge named Get-EdgeEnterpriseMSI.ps1)
 
-  1.0 -   Initial script development
-  1.1 -   Fixes and improvements by @KarlGrindon
-          - Script now handles multiple files for e.g. MacOS Edge files
-          - Better error handling and formating
-          - URI Validation
-  1.2 -   Better compability on servers (force TLS and remove dependency to IE)
-
-  
-  https://docs.microsoft.com/en-us/mem/configmgr/apps/deploy-use/deploy-edge
+  Added the function to "install"
 
 .EXAMPLE
   
@@ -156,6 +149,9 @@ else {
   }
 }
 
+if ($Force){
+    New-Item -Path $Folder -Force -ItemType Directory -ErrorAction Stop
+}
 
 if (Test-Path $Folder) {
   foreach ($artifacts in $selectedObject.Artifacts) {
