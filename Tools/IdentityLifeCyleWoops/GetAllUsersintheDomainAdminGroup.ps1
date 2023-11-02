@@ -1,5 +1,5 @@
 
-# This will get all users that are memebr of the Domain Admin group
+# This will get all users that are member of the Domain Admin group
 
 Get-ADGroupMember -Identity "Domain Admins" -Recursive | 
 Get-ADUser -Properties Name,LastLogonDate,PasswordNeverExpires,PwdLastSet | Where-Object {$_.Enabled -eq $true} | 
