@@ -14,7 +14,7 @@
 '// Version: 2.2 - November 14, 2015 - Mikael Nystrom
 '// Version: 2.3 - September 27, 2017 - Mikael Nystrom
 '// Version: 2.4 - April 15, 2023 - Pavel Andreev
-'// - Removed C++ 2005-2010
+'// - Removed C++ 2005-2012
 '// - Added C++ 2015, 2017, 2019, 2022 (Universal package)
 '//
 '// This script is provided "AS IS" with no warranties, confers no rights and is not supported by the authors.
@@ -35,8 +35,6 @@ Function ZTIProcess()
 
 	oLogging.CreateEntry oUtility.ScriptName & ": Starting installation", LogTypeInfo
 
-	Dim sSetupFile2012x86
-	Dim sSetupFile2012x64
 	Dim sSetupFile2013x86
 	Dim sSetupFile2013x64
 	Dim sSetupFile2022x86
@@ -47,8 +45,6 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1
 
-	sSetupFile2012x86 = oUtility.ScriptDir & "\Source\VS2012\vcredist_x86.exe"
-	sSetupFile2012x64 = oUtility.ScriptDir & "\Source\VS2012\vcredist_x64.exe"
 	sSetupFile2013x86 = oUtility.ScriptDir & "\Source\VS2013\vcredist_x86.exe"
 	sSetupFile2013x64 = oUtility.ScriptDir & "\Source\VS2013\vcredist_x64.exe"
 	sSetupFile2022x86 = oUtility.ScriptDir & "\Source\VS2022\vc_redist.x86.exe"
@@ -56,11 +52,6 @@ Function ZTIProcess()
 	sArguments = "/Q"
 
     '// Checking x86 distributives
-	If not oFSO.FileExists(sSetupFile2012x86) then
-		oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2012x86 & " was not found, unable to install", LogTypeError
-		ZTIProcess = Failure
-		Exit Function
-	End if
 	If not oFSO.FileExists(sSetupFile2013x86) then
 		oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2013x86 & " was not found, unable to install", LogTypeError
 		ZTIProcess = Failure
@@ -71,17 +62,6 @@ Function ZTIProcess()
 		ZTIProcess = Failure
 		Exit Function
 	End if
-
-    '// Install 2012 x86
-	oLogging.CreateEntry oUtility.ScriptName & ": About to install " & sSetupFile2012x86, LogTypeInfo
-	iRetVal = oUtility.RunWithHeartbeat("""" & sSetupFile2012x86 & """ " & sArguments)
-	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success
-	Else
-		ZTIProcess = Failure
-	End If
-	oLogging.CreateEntry oUtility.ScriptName & ": Return code from command = " & iRetVal, LogTypeInfo
-	oLogging.CreateEntry oUtility.ScriptName & ": Finished installation", LogTypeInfo
 
     '// Install 2013 x86
 	oLogging.CreateEntry oUtility.ScriptName & ": About to install " & sSetupFile2013x86, LogTypeInfo
@@ -109,11 +89,6 @@ Function ZTIProcess()
 	If oEnvironment.Item("Architecture") = "X64" then
 
         '// Checking x86 distributives
-		If not oFSO.FileExists(sSetupFile2012x64) then
-			oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2012x64 & " was not found, unable to install", LogTypeError
-			ZTIProcess = Failure
-			Exit Function
-		End if
 		If not oFSO.FileExists(sSetupFile2013x64) then
 			oLogging.CreateEntry oUtility.ScriptName & ": " & sSetupFile2013x64 & " was not found, unable to install", LogTypeError
 			ZTIProcess = Failure
@@ -124,17 +99,6 @@ Function ZTIProcess()
 			ZTIProcess = Failure
 			Exit Function
 		End if
-
-        '// Install 2012 x64
-		oLogging.CreateEntry oUtility.ScriptName & ": About to install " & sSetupFile2012x64, LogTypeInfo
-		iRetVal = oUtility.RunWithHeartbeat("""" & sSetupFile2012x64 & """ " & sArguments)
-		if (iRetVal = 0) or (iRetVal = 3010) then
-			ZTIProcess = Success
-		Else
-			ZTIProcess = Failure
-		End If
-		oLogging.CreateEntry oUtility.ScriptName & ": Return code from command = " & iRetVal, LogTypeInfo
-		oLogging.CreateEntry oUtility.ScriptName & ": Finished installation", LogTypeInfo
 
         '// Install 2013 x64
 		oLogging.CreateEntry oUtility.ScriptName & ": About to install " & sSetupFile2013x64, LogTypeInfo
