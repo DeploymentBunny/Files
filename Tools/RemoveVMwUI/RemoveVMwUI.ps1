@@ -1,8 +1,11 @@
 ﻿<#
 .Synopsis
-    RemoveVMwUI will remove selected virtual machines, including datafiles and folder
+    Interactively remove one or more Hyper-V virtual machines and their related files.
 .DESCRIPTION
-    RemoveVMwUI will remove selected virtual machines, including datafiles and folder, forever, without any questions
+    Presents a GUI list of available Hyper-V virtual machines, lets you select one or more VMs,
+    and then permanently deletes each selected VM. The script stops running VMs when needed,
+    removes checkpoints/snapshots, deletes attached virtual disk files, and removes the VM
+    configuration folder from disk.
 .EXAMPLE
     RemoveVMwUI
 .NOTES
@@ -14,10 +17,13 @@
     Created:     2018-09-21
     Updated:     2018-09-23
                  Added code to remove VM's with snapshot without the need of waiting for the merge process
+    updated:     2026-04-17
+                 Updated documentation
     web:         http://www.deploymentbunny.com
 .FUNCTIONALITY
-    The script will check if you are elevated or not, if not it will elevate you. It will then use get-vm to get all VMs, present in a dialogbox, where you can select vm's
-    it will then find out locations of resources used ny the vm, including the folder and then remove all of it, if the vm is running it will be stopped and then deleted.
+    The script verifies administrative privileges and self-elevates when required. It then
+    queries Hyper-V for VMs, displays a selection dialog, and removes all selected VMs with
+    associated resources. If a VM is running, it is powered off before removal.
 #>
 
 # Get the ID and security principal of the current user account
@@ -181,13 +187,12 @@ Function Remove-VIAVM
 {
 <#
 .Synopsis
-   Short description
+    Removes Hyper-V virtual machines and their associated files.
 .DESCRIPTION
-   Long description
+    Stops running VMs, removes snapshots/checkpoints, deletes attached virtual disk files,
+    removes the VM from Hyper-V, and deletes the VM configuration folder.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+    Remove-VIAVM -VMName "VM01"
 #>
     [cmdletbinding(SupportsShouldProcess=$True)]
 

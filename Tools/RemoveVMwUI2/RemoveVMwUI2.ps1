@@ -1,6 +1,19 @@
-<# This form was created using POSHGUI.com  a free online gui designer for PowerShell
-.NAME
-    Untitled
+<#
+.SYNOPSIS
+    GUI tool to connect to a Hyper-V host and permanently remove selected virtual machines.
+.DESCRIPTION
+    RemoveVMwUI2 provides a Windows Forms interface for Hyper-V VM cleanup. The script
+    self-elevates to run with administrative privileges, connects to a specified Hyper-V host,
+    lists available VMs, and deletes selected VMs including their checkpoints/snapshots,
+    attached virtual disk files, and configuration folder.
+
+    If a selected VM is running, it is force-stopped before removal.
+.EXAMPLE
+    .\RemoveVMwUI2.ps1
+
+    Launches the UI, connects to the local host by default, and allows interactive VM removal.
+.NOTES
+    The form layout was originally generated with POSHGUI and adapted for this script.
 #>
 
 # Get the ID and security principal of the current user account
@@ -44,22 +57,21 @@ $imageBytes = [Convert]::FromBase64String($PictureString)
 $outputPath = "$env:TEMP\deploymentbunnylogo.png"
 [System.IO.File]::WriteAllBytes($outputPath, $imageBytes)
 
+# Load user32.dll and define ShowWindowAsync function
 $DLL = '[DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);'
 Add-Type -MemberDefinition $DLL -name NativeMethods -namespace Win32
 $Process = (Get-Process PowerShell | Where-Object MainWindowTitle -like '*RemoveVMwUI*').MainWindowHandle
 # Minimize window
 [Win32.NativeMethods]::ShowWindowAsync($Process, 2)
 
+# Load Windows Forms assembly and enable visual styles
 Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-#Get Env:
-$RootFolder = $MyInvocation.MyCommand.Path | Split-Path -Parent
-
+# Set font for all controls
 $Font = 'Consolas,10'
 
 #region begin GUI{ 
-
 $Form                            = New-Object system.Windows.Forms.Form
 $Form.ClientSize                 = '600,400'
 $Form.text                       = "Form"
@@ -128,14 +140,31 @@ $PictureBox1.SizeMode            = [System.Windows.Forms.PictureBoxSizeMode]::zo
 $Form.controls.AddRange(@($Close,$Connect,$Label1,$Label2,$TextBox1,$ListBox1,$Delete,$PictureBox1))
 
 #region gui events {
-$Connect.Add_Click({ Connect })
-$Close.Add_Click({ Close })
-$Delete.Add_Click({ Delete })
+$Connect.Add_Click({ Connect-TSxUI })
+$Close.Add_Click({ Close-TSxUI })
+$Delete.Add_Click({ Delete-TSxUI })
 #endregion events }
 
 #endregion GUI }
 
 Function Remove-TSxVM{
+    <#
+    .SYNOPSIS
+        Removes a virtual machine and related files from a Hyper-V host.
+    .DESCRIPTION
+        Connects to the specified Hyper-V host and removes the specified VM. If the VM is
+        running, it is force-stopped. Any checkpoints/snapshots are restored/removed first,
+        then attached virtual disk files are deleted, the VM is removed from Hyper-V, and
+        the VM configuration folder is deleted from disk.
+    .PARAMETER Computername
+        Name of the Hyper-V host where the VM exists.
+    .PARAMETER VMName
+        Name of the virtual machine to remove.
+    .EXAMPLE
+        Remove-TSxVM -Computername "HV01" -VMName "TestVM01"
+
+        Removes TestVM01 from host HV01, including snapshots, disks, and config folder.
+    #>
     [cmdletbinding(SupportsShouldProcess=$True)]
     Param
     (
@@ -148,6 +177,7 @@ Function Remove-TSxVM{
         $VMName
     )
 
+    # The script block to execute on the remote Hyper-V host
     $ScriptBlock = {
         $Item = Get-VM -Name $using:VMName -ErrorAction SilentlyContinue
         If($Item.count -eq "0"){
@@ -183,7 +213,18 @@ Function Remove-TSxVM{
     }
     Invoke-Command -ComputerName $Computername -ScriptBlock $ScriptBlock
 }
-Function Connect{
+Function Connect-TSxUI{
+    <#
+    .SYNOPSIS
+        Connects to a Hyper-V host and loads VM names into the UI list.
+    .DESCRIPTION
+        Uses the hostname entered in the Hyper-V host textbox, queries that host for
+        virtual machines, and refreshes the listbox with the current VM names.
+    .EXAMPLE
+        Connect-TSxUI
+
+        Refreshes the VM list in the GUI based on the current host value.
+    #>
     Write-host "Connecting to $($TextBox1.Text)"
     Write-host "Getting VM's from $($TextBox1.Text)"
     $VMs = Get-VM -ComputerName $($TextBox1.Text) | Sort-Object
@@ -195,16 +236,42 @@ Function Connect{
     }
 
 }
-Function Close{
+Function Close-TSxUI{
+    <#
+    .SYNOPSIS
+        Closes the RemoveVMwUI2 window.
+    .DESCRIPTION
+        Closes the main Windows Forms dialog and ends the interactive UI session.
+    .EXAMPLE
+        Close-TSxUI
+
+        Closes the active RemoveVMwUI2 form.
+    #>
     $Form.close()
 }
-Function Delete{
+Function Delete-TSxUI{
     $SelectedItems = $ListBox1.SelectedItems
+    if($SelectedItems.Count -eq 0){
+        [void][System.Windows.Forms.MessageBox]::Show(
+            "Please select one or more virtual machines.",
+            "RemoveVMwUI2",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+        return
+    }
+
     foreach($SelectedItem in $SelectedItems){
         Write-Host "Deleting $SelectedItem from $($TextBox1.Text)"
         Remove-TSxVM -Computername $($TextBox1.Text) -VMName $SelectedItem
     }
-    Connect
+    [void][System.Windows.Forms.MessageBox]::Show(
+        "Done",
+        "RemoveVMwUI2",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+    Connect-TSxUI
 }
 
 [void]$Form.ShowDialog()
