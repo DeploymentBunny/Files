@@ -18,7 +18,7 @@
     Updated:     2018-09-23
                  Added code to remove VM's with snapshot without the need of waiting for the merge process
     updated:     2026-04-17
-                 Updated documentation
+                 Updated
     web:         http://www.deploymentbunny.com
 .FUNCTIONALITY
     The script verifies administrative privileges and self-elevates when required. It then
@@ -29,6 +29,23 @@
 # Get the ID and security principal of the current user account
  $myWindowsID=[System.Security.Principal.WindowsIdentity]::GetCurrent()
  $myWindowsPrincipal=New-Object System.Security.Principal.WindowsPrincipal($myWindowsID)
+
+# Logging setup
+$Script:LogFile = Join-Path $env:TEMP ("RemoveVMwUI_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+$Script:RunUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$Script:RemovedVMs = New-Object System.Collections.Generic.List[string]
+
+Function Write-TSxLog {
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $Script:LogFile -Value ("[{0}] [User: {1}] {2}" -f $timestamp, $Script:RunUser, $Message)
+}
+
+Write-TSxLog -Message "Script started"
   
  # Get the security principal for the Administrator role
  $adminRole=[System.Security.Principal.WindowsBuiltInRole]::Administrator
@@ -59,12 +76,14 @@ else{
     exit
 }
 
+# Minimize the window to avoid the "UAC" prompt to be hidden behind it
 $DLL = '[DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);'
 Add-Type -MemberDefinition $DLL -name NativeMethods -namespace Win32
 $Process = (Get-Process PowerShell | Where-Object MainWindowTitle -like '*RemoveVMwUI*').MainWindowHandle
 # Minimize window
-[Win32.NativeMethods]::ShowWindowAsync($Process, 2)
+[void][Win32.NativeMethods]::ShowWindowAsync($Process, 2)
 
+# Get the list of virtual machines
 $VMnames = Get-VM
 
 #First box
@@ -119,6 +138,12 @@ $objForm.Add_Shown({$objForm.Activate()})
 
 #Set the return value to $X
 $Selections = $objListBox.SelectedItems
+
+if($Selections.Count -eq 0){
+    Write-TSxLog -Message "No VM selected. Script ended."
+}else{
+    Write-TSxLog -Message ("Selected VMs: {0}" -f (($Selections | ForEach-Object { $_.ToString() }) -join ", "))
+}
 
 #Third Box
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
@@ -183,7 +208,7 @@ Function Remove-TSxSnapShot{
     }
 }
 
-Function Remove-VIAVM
+Function Remove-TSxVM
 {
 <#
 .Synopsis
@@ -192,7 +217,7 @@ Function Remove-VIAVM
     Stops running VMs, removes snapshots/checkpoints, deletes attached virtual disk files,
     removes the VM from Hyper-V, and deletes the VM configuration folder.
 .EXAMPLE
-    Remove-VIAVM -VMName "VM01"
+    Remove-TSxVM -VMName "VM01"
 #>
     [cmdletbinding(SupportsShouldProcess=$True)]
 
@@ -218,19 +243,46 @@ Function Remove-VIAVM
             }
 
             $Disks = Get-VMHardDiskDrive -VM $Item
+            $DiskPaths = @($Disks | ForEach-Object { $_.Path })
             foreach ($Disk in $Disks){
                 Write-Verbose "Removing $($Disk.Path)"
                 Remove-Item -Path $Disk.Path -Force -ErrorAction Continue
             }
             $ItemLoc = (Get-VM -Id $Item.id).ConfigurationLocation
+            Write-TSxLog -Message ("Deleting VM '{0}' from folder '{1}'. Disk files: {2}" -f $Item.Name, $ItemLoc, ($DiskPaths -join "; "))
             Write-Verbose "Removing $item"
             Get-VM -Id $item.Id | Remove-VM -Force
             Write-Verbose "Removing $ItemLoc"
             Remove-Item -Path $Itemloc -Recurse -Force
+            if(-not $Script:RemovedVMs.Contains($Item.Name)){
+                [void]$Script:RemovedVMs.Add($Item.Name)
+            }
         }
     }
 }
 
 foreach($Selection in $Selections){
-    Remove-VIAVM -VMName $Selection
+    Remove-TSxVM -VMName $Selection
 }
+
+if($Script:RemovedVMs.Count -gt 0){
+    $RemovedList = ($Script:RemovedVMs | Sort-Object) -join "`r`n"
+    [void][System.Windows.Forms.MessageBox]::Show(
+        "The following virtual machine(s) were removed:`r`n`r`n$RemovedList",
+        "RemoveVMwUI",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+    Write-TSxLog -Message ("Removed VMs: {0}" -f (($Script:RemovedVMs | Sort-Object) -join ", "))
+}
+else{
+    [void][System.Windows.Forms.MessageBox]::Show(
+        "No virtual machines were removed.",
+        "RemoveVMwUI",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+    Write-TSxLog -Message "No VMs were removed"
+}
+
+Write-TSxLog -Message "Script completed"
