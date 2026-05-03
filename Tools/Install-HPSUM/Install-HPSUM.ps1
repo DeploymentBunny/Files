@@ -1,10 +1,10 @@
 ﻿<#
 .Synopsis
-   Short description.
+   Install HP Service Pack for ProLiant (HP SUM).
 .DESCRIPTION
-   Long description
+   Installs HP Service Pack for ProLiant (HP SUM).
 .EXAMPLE
-
+    .\Install-HPSUM.ps1
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 Param()

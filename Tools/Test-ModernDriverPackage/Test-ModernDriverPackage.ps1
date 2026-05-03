@@ -1,6 +1,19 @@
 ﻿<#
- # This script will get driver packages using the Modern Driver Managment WebServices on the machine you run it on
- # (http://www.scconfigmgr.com/modern-driver-management)
+.SYNOPSIS
+    Tests Modern Driver Management by querying driver packages from the ConfigMgr web service.
+
+.DESCRIPTION
+    Test-ModernDriverPackage queries the Modern Driver Management web service (ConfigMgrWebService)
+    to retrieve driver packages matching the current machine's hardware (make, model, baseboard).
+    Supports HP, Hewlett-Packard, Dell, Lenovo, and Microsoft Surface devices.
+
+.EXAMPLE
+    .\Test-ModernDriverPackage.ps1
+
+.NOTES
+    Author: DeploymentBunny
+    Date:   2026-04-28
+    Reference: http://www.scconfigmgr.com/modern-driver-management
 #>
 
 $Make = (Get-WmiObject -Class Win32_Computersystem).Manufacturer

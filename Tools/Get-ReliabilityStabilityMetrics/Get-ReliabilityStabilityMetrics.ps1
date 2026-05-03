@@ -1,17 +1,18 @@
-﻿<#
+<#
 .Synopsis
-    Script from TechDays Sweden 2016
+    Collect reliability and stability metrics from remote computers.
 .DESCRIPTION
-    Script from TechDays Sweden 2016
+    Collects reliability stability index, system uptime, OS version, hardware make/model,
+    and free disk space from remote computers via WMI, using Active Directory to discover targets.
 .NOTES
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
-    Blog   : http://deploymentbunny.com
+    Blog   : https://www.deploymentbunny.com
     Disclaimer:
     This script is provided "AS IS" with no warranties, confers no rights and 
     is not supported by the authors or Deployment Artist.
 .LINK
-    http://www.deploymentbunny.com
+    https://www.deploymentbunny.com
 #>
 Param(
     $ComputerNames

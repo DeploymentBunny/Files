@@ -1,17 +1,18 @@
-﻿<#
+<#
 .Synopsis
-    Script from TechDays Sweden 2016
+    DHCP server health check.
 .DESCRIPTION
-    Script from TechDays Sweden 2016
+    Checks DHCP server health by testing network connectivity, listing authorized DHCP servers,
+    reporting scope usage statistics, and running Best Practices Analyzer against the DHCP role.
 .NOTES
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
-    Blog   : http://deploymentbunny.com
+    Blog   : https://www.deploymentbunny.com
     Disclaimer:
     This script is provided "AS IS" with no warranties, confers no rights and 
     is not supported by the authors or Deployment Artist.
 .LINK
-    http://www.deploymentbunny.com
+    https://www.deploymentbunny.com
 #>
 $DHCPServers = "SRVDC01.network.local"
 Foreach($DHCPServer in $DHCPServers){

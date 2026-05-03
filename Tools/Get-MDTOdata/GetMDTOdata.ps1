@@ -3,7 +3,8 @@ Function Get-MDTOData{
     .Synopsis
         Function for getting MDTOdata
     .DESCRIPTION
-        Function for getting MDTOdata
+        Queries the MDT Monitor service REST API on the specified server and returns
+        deployment status for all computers tracked by MDT monitoring.
     .EXAMPLE
         Get-MDTOData -MDTMonitorServer MDTSERVER01
     .NOTES
@@ -12,10 +13,14 @@ Function Get-MDTOData{
  
         Author - Mikael Nystrom
         Twitter: @mikael_nystrom
-        Blog   : http://deploymentbunny.com
+        Blog   : https://www.deploymentbunny.com
+ 
+        Disclaimer:
+        This script is provided "AS IS" with no warranties, confers no rights and
+        is not supported by the author.
  
     .LINK
-        http://www.deploymentbunny.com
+        https://www.deploymentbunny.com
     #>
     Param(
     $MDTMonitorServer
@@ -25,11 +30,11 @@ Function Get-MDTOData{
     foreach($property in ($Data.content.properties) ){
         $Hash =  [ordered]@{ 
             Name = $($property.Name); 
-            PercentComplete = $($property.PercentComplete.’#text’); 
-            Warnings = $($property.Warnings.’#text’); 
-            Errors = $($property.Errors.’#text’); 
+            PercentComplete = $($property.PercentComplete.ï¿½#textï¿½); 
+            Warnings = $($property.Warnings.ï¿½#textï¿½); 
+            Errors = $($property.Errors.ï¿½#textï¿½); 
             DeploymentStatus = $( 
-            Switch($property.DeploymentStatus.’#text’){ 
+            Switch($property.DeploymentStatus.ï¿½#textï¿½){ 
                 1 { "Active/Running"} 
                 2 { "Failed"} 
                 3 { "Successfully completed"} 
@@ -45,8 +50,8 @@ Function Get-MDTOData{
             VMHost = $($property.VMHost.'#text');
             VMName = $($property.VMName.'#text');
             LastTime = $($property.LastTime.'#text') -replace "T"," ";
-            StartTime = $($property.StartTime.’#text’) -replace "T"," "; 
-            EndTime = $($property.EndTime.’#text’) -replace "T"," "; 
+            StartTime = $($property.StartTime.ï¿½#textï¿½) -replace "T"," "; 
+            EndTime = $($property.EndTime.ï¿½#textï¿½) -replace "T"," "; 
             }
         New-Object PSObject -Property $Hash
     }

@@ -1,17 +1,18 @@
-﻿<#
+<#
 .Synopsis
-    Script from TechDays Sweden 2016
+    Hyper-V host health check.
 .DESCRIPTION
-    Script from TechDays Sweden 2016
+    Checks Hyper-V host health by testing network connectivity, reporting base system
+    and storage information, listing VM states, and identifying differencing disks in use.
 .NOTES
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
-    Blog   : http://deploymentbunny.com
+    Blog   : https://www.deploymentbunny.com
     Disclaimer:
     This script is provided "AS IS" with no warranties, confers no rights and 
     is not supported by the authors or Deployment Artist.
 .LINK
-    http://www.deploymentbunny.com
+    https://www.deploymentbunny.com
 #>
 $HyperVHosts = "demohost03.network.local"
 

@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install PDF Creator.
 .DESCRIPTION
-   Long description
+   Installs PDF Creator.
 .EXAMPLE
-
+    .\Install-PDFCreator.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

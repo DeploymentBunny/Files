@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install VLC media player.
 .DESCRIPTION
-   Long description
+   Installs VLC media player.
 .EXAMPLE
-
+    .\Install-VLCPlayer.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

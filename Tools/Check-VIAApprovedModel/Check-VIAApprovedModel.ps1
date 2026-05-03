@@ -5,7 +5,7 @@ Param(
 
 $XMLFile = 'http://demohost03/ApprovedModelList/VIAApprovedModel.xml'
 
-Function Check-VIAApprovedModel{
+Function Test-VIAApprovedModel{
     Param(
         $XMLFile,
         $Model,
@@ -23,7 +23,7 @@ Function Check-VIAApprovedModel{
     }
 }
 
-$result = Check-VIAApprovedModel -XMLFile $xmlfile -Model $Model -OperatingSystem $OperatingSystem
+$result = Test-VIAApprovedModel -XMLFile $xmlfile -Model $Model -OperatingSystem $OperatingSystem
 if($result -eq $True){
     Write-Host - "Approved"
     Exit 0

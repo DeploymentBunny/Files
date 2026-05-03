@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Office 365 ProPlus.
 .DESCRIPTION
-   Long description
+   Installs Office 365 ProPlus.
 .EXAMPLE
-
+    .\Install-Office365.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Visual C++ Runtime v14 for Desktop Bridge.
 .DESCRIPTION
-   Long description
+   Installs the Visual C++ Runtime v14 framework package for Desktop Bridge applications.
 .EXAMPLE
-
+    .\Install-C++Runtimev14.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

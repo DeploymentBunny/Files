@@ -16,6 +16,13 @@
 .NOTES
   Author: Secure Boot Support Toolkit
   Requires: Admin, UEFI system
+
+    Author - Mikael Nystrom
+    Twitter: @mikael_nystrom
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
 #>
 
 [CmdletBinding()]

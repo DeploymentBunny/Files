@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Get-EdgeEnterpriseMSI
+  Get-TSxMSEdgeNow
 
 .DESCRIPTION
-  Imports all device configurations in a folder to a specified tenant
+  Downloads the latest Microsoft Edge Enterprise MSI for the specified channel.
 
 .PARAMETER Channel
   Channel to download, Valid Options are: Dev, Beta, Stable, EdgeUpdate, Policy.
@@ -42,10 +42,17 @@
   
   https://docs.microsoft.com/en-us/mem/configmgr/apps/deploy-use/deploy-edge
 
+    Author - Mikael Nystrom
+    Twitter: @mikael_nystrom
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
+
 .EXAMPLE
   
   Download the latest version for the Beta channel and overwrite any existing file
-  .\Get-EdgeEnterpriseMSI.ps1 -Channel Beta -Folder D:\SourceCode\PowerShell\Div -Force
+  .\Get-TSxMSEdgeNow.ps1 -Channel Beta -Folder D:\Sources -Force
 
 #>
 [CmdletBinding()]

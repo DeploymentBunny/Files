@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Mozilla Firefox.
 .DESCRIPTION
-   Long description
+   Installs Mozilla Firefox.
 .EXAMPLE
-
+    .\Install-MozillaFirefox.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

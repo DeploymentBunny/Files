@@ -1,8 +1,8 @@
-﻿<#
+<#
 .Synopsis
-   Create-VIAComputerName
+   Generate computer names based on a prefix and numeric range.
 .DESCRIPTION
-   Create-VIAComputerName
+   Generates computer names based on a prefix string and a numeric range.
 .PARAMETER ComputerPrefix
    String that defines the prefix of the computername to be generated    
 .PARAMETER LowNumber
@@ -10,7 +10,7 @@
 .PARAMETER HigNumber
     Integer the defines the ending number
 .EXAMPLE
-   Create-VIAComputerName -ComputerPrefix SERVER- -LowNumber 1 -HigNumber 10
+   New-VIAComputerName -ComputerPrefix SERVER- -LowNumber 1 -HigNumber 10
 
    The command will return the following
    SERVER-001
@@ -29,15 +29,15 @@
 
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
-    Blog   : http://deploymentbunny.com
+    Blog   : https://www.deploymentbunny.com
 
     Disclaimer:
     This script is provided "AS IS" with no warranties, confers no rights and 
     is not supported.
 .LINK
-    http://www.deploymentbunny.com
+    https://www.deploymentbunny.com
 #>
-function Create-VIAComputerName
+function New-VIAComputerName
 {
     Param
     (

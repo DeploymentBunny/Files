@@ -11,6 +11,92 @@ Twitter: @mikael_nystrom
 - Total folders under Tools: 91
 - Total script files under Tools: 104
 
+## Disk Performance Benchmark Tools
+
+This repository includes two scripts for running DiskSpd benchmarks and viewing results.
+
+### Script 1: Measure-DiskPerf.ps1
+
+- Path: Tools/Measure-DiskPerf/Measure-DiskPerf.ps1
+- Purpose: Runs DiskSpd tests for three random read/write mixes and builds CSV, JSON, XML, PNG, and HTML output.
+
+Supported workload patterns:
+
+- Random 60% Read / 40% Write
+- Random 70% Read / 30% Write
+- Random 80% Read / 20% Write
+
+Default values:
+
+- TargetPath: %TEMP%
+- Duration: 120 seconds
+- BlockSizeKB: 4
+- Threads: 2
+- OutputPath: %TEMP%\DiskSpdResults
+- DiskSpdPath: diskspd.exe
+
+Input behavior:
+
+- Folder path: creates a timestamped test file in that folder.
+- File path: uses that exact file path.
+- Drive letter only (for example C or C:): normalizes to C:\.
+
+Main parameters:
+
+- TargetPath: local folder, UNC folder, local file, or UNC file.
+- Duration: benchmark duration in seconds.
+- BlockSizeKB: block size in kilobytes.
+- Threads: threads per target and queue depth.
+- OutputPath: output folder for all artifacts.
+- DiskSpdPath: full path to diskspd.exe, or executable name if available in PATH.
+
+Generated artifacts:
+
+- DiskSpd_*.xml: raw XML output for each run.
+- Graph_IOPS_*.png: IOPS over time graph.
+- Graph_Latency_*.png: latency distribution graph.
+- DiskSpd_Summary_*.csv: tabular summary.
+- DiskSpd_Summary_*.json: JSON summary.
+- DiskSpd_Report_*.html: consolidated report.
+
+Example:
+
+- .\Tools\Measure-DiskPerf\Measure-DiskPerf.ps1 -TargetPath 'D:\Bench' -Duration 60 -BlockSizeKB 4 -Threads 2
+
+### Script 2: Measure-DiskPerfwUI.ps1
+
+- Path: Tools/Measure-DiskPerf/Measure-DiskPerfwUI.ps1
+- Purpose: Windows Forms launcher for Measure-DiskPerf.ps1.
+
+UI capabilities:
+
+- Select target path (local folder or UNC path).
+- Select diskspd.exe path.
+- Configure duration, block size, threads, and output folder.
+- Run the benchmark script with selected values.
+- Optionally open the latest HTML report after the run.
+- Save and restore last used settings in %LOCALAPPDATA%\DeploymentBunny.
+- Write a per-run log file in %TEMP%.
+
+Settings file:
+
+- %LOCALAPPDATA%\DeploymentBunny\Measure-DiskPerfwUI.settings.json
+
+Log file naming:
+
+- %TEMP%\Measure-DiskPerfwUI_yyyyMMdd_HHmmss.log
+
+Example:
+
+- .\Tools\Measure-DiskPerf\Measure-DiskPerfwUI.ps1
+
+Prerequisites for both scripts:
+
+- Windows PowerShell 5.1 or newer.
+- DiskSpd installed and available by full path or PATH.
+- Write access to the selected output folder.
+- For chart images: System.Windows.Forms.DataVisualization assembly available on the host.
+
 ## Folders And Scripts
 
 ### Tools
@@ -546,7 +632,8 @@ Twitter: @mikael_nystrom
 
 - Description: Contains scripts and related files for Save AllRunningVMs tasks.
 - Scripts:
-  - Tools/Save-AllRunningVMs/Save-AllRunningVMs.ps1: Script for Save AllRunningVMs.
+  - Tools/Save-AllRunningVMs/Save-TSxAllRunningVMs.ps1: Script for Save TSxAllRunningVMs.
+  - Tools/Save-AllRunningVMs/Resume-TSxAllRunningVMs.ps1: Script for Resume TSxAllRunningVMs.
 
 ### Tools/Set-TSxTimesync
 
@@ -558,7 +645,8 @@ Twitter: @mikael_nystrom
 
 - Description: Contains scripts and related files for Start VIADeDupJob tasks.
 - Scripts:
-  - Tools/Start-VIADeDupJob/Start-VIADeDupJob.ps1: Script for Start VIADeDupJob.
+  - Tools/Start-VIADeDupJob/Invoke-TSxDeDupJob.ps1: Script for Invoke TSxDeDupJob.
+  - Tools/Start-VIADeDupJob/Invoke-TSxDeDupJobUI.ps1: Script for Invoke TSxDeDupJob UI.
 
 ### Tools/Test-ModernDriverPackage
 

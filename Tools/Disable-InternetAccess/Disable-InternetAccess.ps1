@@ -1,4 +1,4 @@
-﻿<#
+<#
     Created:     2017-06-02
     Version:     1.1
 
@@ -8,7 +8,7 @@
 
     Author :     Mikael Nystrom
     Twitter:     @mikael_nystrom
-    Blog   :     http://www.deploymentbunny.com
+    Blog   :     https://www.deploymentbunny.com
 
     Disclaimer:
     This script is provided "AS IS" with no warranties, confers no rights and 

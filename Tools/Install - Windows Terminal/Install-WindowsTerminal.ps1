@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Windows Terminal.
 .DESCRIPTION
-   Long description
+   Installs Windows Terminal.
 .EXAMPLE
-
+    .\Install-WindowsTerminal.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

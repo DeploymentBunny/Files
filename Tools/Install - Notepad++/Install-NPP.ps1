@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Notepad++.
 .DESCRIPTION
-   Long description
+   Installs Notepad++.
 .EXAMPLE
-
+    .\Install-NPP.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

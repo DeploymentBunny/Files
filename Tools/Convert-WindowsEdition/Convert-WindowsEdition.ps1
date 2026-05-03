@@ -184,7 +184,7 @@ $objForm.Controls.Add($objLabel)
 $objForm.Add_Shown({$objForm.Activate()})
 [void] $objForm.ShowDialog()
 }
-Function Inventory-Computer{
+Function Get-ComputerInventory{
     $CurrentWinCaption = Get-WmiObject -Class Win32_OperatingSystem
     #Write-Output $CurrentWinCaption.Caption
     Switch ($CurrentWinCaption.Caption){
@@ -290,7 +290,7 @@ Function Inventory-Computer{
             }
         }
 }
-Function Upgrade-SKU{
+Function Update-SKU{
     #$CurrentWindowsEdition = [String]$CurrentWinCaption.Caption
     Switch ($CurrentWinCaption.Caption){
         'Microsoft Windows Server 2008 R2 Standard '{
@@ -437,7 +437,7 @@ $x = ""
 $CMD = ""
 
 # Get a grip of reality
-. Inventory-Computer
+. Get-ComputerInventory
 
 #Show the options
 . Show-BoxSelection
@@ -446,7 +446,7 @@ $CMD = ""
 $X = $objListBox.SelectedItem
 
 #Find out what actually is being done here
-. Upgrade-SKU
+. Update-SKU
 
 #Show the result of the selection and the command that will run
 . Show-BoxResult

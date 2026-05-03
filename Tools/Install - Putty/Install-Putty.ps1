@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install PuTTY SSH client.
 .DESCRIPTION
-   Long description
+   Installs PuTTY SSH client.
 .EXAMPLE
-
+    .\Install-Putty.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

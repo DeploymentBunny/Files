@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Dell Command | Update.
 .DESCRIPTION
-   Long description
+   Installs Dell Command | Update.
 .EXAMPLE
-
+    .\Install-Dell_command_update.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

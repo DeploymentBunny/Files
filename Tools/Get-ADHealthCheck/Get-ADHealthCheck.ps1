@@ -1,17 +1,19 @@
 <#
 .Synopsis
-    Script from TechDays Sweden 2016
+    Active Directory health check.
 .DESCRIPTION
-    Script from TechDays Sweden 2016
+    Checks Active Directory health by testing network connectivity to all domain controllers
+    in the current forest, verifying that automatic services are running, reviewing debug logs
+    (PASSWD.LOG, netlogon.log), and running DCDiag diagnostic tests against each domain controller.
 .NOTES
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
-    Blog   : http://deploymentbunny.com
+    Blog   : https://www.deploymentbunny.com
     Disclaimer:
     This script is provided "AS IS" with no warranties, confers no rights and 
     is not supported by the authors or Deployment Artist.
 .LINK
-    http://www.deploymentbunny.com
+    https://www.deploymentbunny.com
 #>
 $getForest = [system.directoryservices.activedirectory.Forest]::GetCurrentForest()
 $DCServers = $getForest.Domains.DomainControllers.name

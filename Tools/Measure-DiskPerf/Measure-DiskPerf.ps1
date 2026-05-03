@@ -9,6 +9,13 @@
         - Random 70% Read / 30% Write
         - Random 80% Read / 20% Write
 
+    Default runtime settings are:
+        - Duration: 120 seconds
+        - Block size: 4 KB
+        - Threads per target: 2
+        - Output folder: $env:TEMP\DiskSpdResults
+        - DiskSpd executable: diskspd.exe (resolved from PATH unless a full path is provided)
+
     The target can be:
         - A folder path (e.g., C:\Bench or \\server\share\Bench). The script creates a timestamped file inside it.
         - A file path (e.g., \\server\share\Bench\file.dat). The script uses that exact file.
@@ -39,13 +46,26 @@
     Full path to diskspd.exe if not in PATH
 
 .EXAMPLE
-    .\Run-DiskSpd.ps1 -TargetPath 'D:\Bench' -Duration 20 -BlockSizeKB 4 -Threads 2
+    .\Measure-DiskPerf.ps1 -TargetPath 'D:\Bench' -Duration 60 -BlockSizeKB 4 -Threads 2
 
 .EXAMPLE
-    .\Run-DiskSpd.ps1 -TargetPath '\\fileserver\share\bench' -Duration 30 -BlockSizeKB 8 -Threads 4
+    .\Measure-DiskPerf.ps1 -TargetPath '\\fileserver\share\bench' -Duration 30 -BlockSizeKB 8 -Threads 4
 
 .EXAMPLE
-    .\Run-DiskSpd.ps1 -TargetPath '\\server\share\bench\mytest.dat' -Duration 10
+    .\Measure-DiskPerf.ps1 -TargetPath '\\server\share\bench\mytest.dat' -Duration 10
+.NOTES
+    Code, snippets and inspiration from various sources, including:
+        - DiskSpd documentation and examples
+        - Community scripts and discussions
+        - Personal experience with storage benchmarking
+        - https://github.com/microsoft/diskspd
+
+    Author - Mikael Nystrom
+    Twitter: @mikael_nystrom
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
 #>
 
 [CmdletBinding()]
@@ -53,10 +73,10 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$TargetPath = "$env:TEMP",
 
-    [int]$Duration = 20,
+    [int]$Duration = 120,
     [int]$BlockSizeKB = 4,
     [int]$Threads = 2,
-    [string]$OutputPath = "$PSScriptRoot\DiskSpdResults",
+    [string]$OutputPath = "$env:TEMP\DiskSpdResults",
     [string]$DiskSpdPath = "diskspd.exe"
 )
 
@@ -119,7 +139,7 @@ function New-Chart {
         [array]$X,
         [array]$Y,
         [string]$Path,
-        [string]$XAxisLabel = "Sekund",
+        [string]$XAxisLabel = "Second",
         [string]$YAxisLabel = "IOPS",
         [switch]$IsLatency
     )
@@ -242,10 +262,10 @@ foreach ($pattern in $patterns) {
         $times = $buckets | ForEach-Object { [int]($_.SampleMillisecond / 1000) }
         $totalIops = $buckets | ForEach-Object { [int]$_.Total }
         $iopsChartPath = Join-Path $OutputPath "Graph_IOPS_${safeName}_${($pattern.Name)}_$timestamp.png"
-        New-Chart -Title "IOPS över tid - $safeName $($pattern.Name)" `
+        New-Chart -Title "IOPS over time - $safeName $($pattern.Name)" `
                   -X $times -Y $totalIops `
                   -Path $iopsChartPath `
-                  -XAxisLabel "Sekund" -YAxisLabel "IOPS"
+                  -XAxisLabel "Second" -YAxisLabel "IOPS"
     }
 
     # Latency distribution
@@ -257,11 +277,11 @@ foreach ($pattern in $patterns) {
             elseif ($_.ReadMilliseconds) { [double]$_.ReadMilliseconds }
             else { 0 }
         }
-        $latChartPath = Join-Path $OutputPath "Graph_Latens_${safeName}_${($pattern.Name)}_$timestamp.png"
-        New-Chart -Title "Latensfördelning (percentiler) - $safeName $($pattern.Name)" `
+        $latChartPath = Join-Path $OutputPath "Graph_Latency_${safeName}_${($pattern.Name)}_$timestamp.png"
+        New-Chart -Title "Latency distribution (percentiles) - $safeName $($pattern.Name)" `
                   -X $pct -Y $latMs `
                   -Path $latChartPath `
-                  -XAxisLabel "Percentil" -YAxisLabel "Latency (ms)" -IsLatency
+                  -XAxisLabel "Percentile" -YAxisLabel "Latency (ms)" -IsLatency
     }
 
     # Cleanup test file (works for UNC too)
@@ -367,7 +387,7 @@ $patternNames = $patterns | ForEach-Object { $_.Name }
 foreach ($patternName in $patternNames) {
     $xmlFile   = Get-ChildItem -LiteralPath $OutputPath -Filter "DiskSpd_${safeName}_${patternName}_*.xml"   | Sort-Object LastWriteTime | Select-Object -Last 1
     $iopsGraph = Get-ChildItem -LiteralPath $OutputPath -Filter "Graph_IOPS_${safeName}_${patternName}_*.png" | Sort-Object LastWriteTime | Select-Object -Last 1
-    $latGraph  = Get-ChildItem -LiteralPath $OutputPath -Filter "Graph_Latens_${safeName}_${patternName}_*.png"| Sort-Object LastWriteTime | Select-Object -Last 1
+    $latGraph  = Get-ChildItem -LiteralPath $OutputPath -Filter "Graph_Latency_${safeName}_${patternName}_*.png"| Sort-Object LastWriteTime | Select-Object -Last 1
 
     if (-not $xmlFile -and -not $iopsGraph -and -not $latGraph) { continue }
 
@@ -385,7 +405,7 @@ foreach ($patternName in $patternNames) {
     if ($iopsGraph) {
         $html += @"
   <div class='graph'>
-    <h3>IOPS över tid</h3>
+        <h3>IOPS over time</h3>
     <img src='$($iopsGraph.Name)' alt='IOPS graph' />
   </div>
 "@
@@ -394,7 +414,7 @@ foreach ($patternName in $patternNames) {
     if ($latGraph) {
         $html += @"
   <div class='graph'>
-    <h3>Latensfördelning (percentiler)</h3>
+        <h3>Latency distribution (percentiles)</h3>
     <img src='$($latGraph.Name)' alt='Latency graph' />
   </div>
 "@

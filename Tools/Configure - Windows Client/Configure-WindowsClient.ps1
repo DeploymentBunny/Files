@@ -1,16 +1,16 @@
-﻿<#
+<#
 .SYNOPSIS
     Baseconfig for W10
 .DESCRIPTION
-    Baseconfig for W10
+    Applies base configuration settings for Windows 10 clients during deployment.
 .EXAMPLE
-    Baseconfig for W10
+    .\Configure-WindowsClient.ps1
 .NOTES
         ScriptName: Configure-WindowsClient.ps1
         Author:     Mikael Nystrom
         Twitter:    @mikael_nystrom
-        Email:      mikael.nystrom@truesec.se
-        Blog:       https://deploymentbunny.com
+        Email:      deploymentbunny@outlook.com
+        Blog:       https://www.deploymentbunny.com
 
     Version History
     1.0.0 - Script created [01/16/2019 13:12:16]
@@ -34,6 +34,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
 #>
 
 [cmdletbinding(SupportsShouldProcess=$True)]

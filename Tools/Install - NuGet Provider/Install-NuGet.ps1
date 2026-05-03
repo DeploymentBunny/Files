@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install NuGet package provider.
 .DESCRIPTION
-   Long description
+   Installs the NuGet package provider.
 .EXAMPLE
-
+    .\Install-NuGet.ps1
 #>
 
 [cmdletbinding(SupportsShouldProcess=$True)]

@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Office 365 ProPlus with Visio.
 .DESCRIPTION
-   Long description
+   Installs Office 365 ProPlus with Visio.
 .EXAMPLE
-
+    .\Install-Office365Visio.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

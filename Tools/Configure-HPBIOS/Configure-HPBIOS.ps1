@@ -1,7 +1,7 @@
-﻿<#
+<#
  Install Wrapper 1.0
  Author: Mikael Nystrom
- http://www.deploymentbunny.com 
+ https://www.deploymentbunny.com 
 #>
 param($Username,$Password,$mode)
 Function Invoke-Exe{

@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Visual Studio Code.
 .DESCRIPTION
-   Long description
+   Installs Visual Studio Code.
 .EXAMPLE
-
+    .\Install-VSCode.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

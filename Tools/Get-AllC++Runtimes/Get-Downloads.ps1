@@ -4,7 +4,7 @@
  #  Created:     2012-12-26
  #  version:     v1.0
  #  Author:      Mikael Nystrom
- #  Homepage:    https://deploymentbunny.com/2014/08/05/powershell-is-king-download-all-vc-runtimes-using-a-script/
+ #  Homepage:    https://www.deploymentbunny.com/2014/08/05/powershell-is-king-download-all-vc-runtimes-using-a-script/
  ##################################################################################
 
  ##################################################################################

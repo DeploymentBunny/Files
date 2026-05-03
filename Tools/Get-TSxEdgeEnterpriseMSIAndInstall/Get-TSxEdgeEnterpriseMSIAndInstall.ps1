@@ -1,9 +1,9 @@
 ﻿<#
 .SYNOPSIS
-  Get-EdgeEnterpriseMSI
+  Get-TSxEdgeEnterpriseMSIAndInstall
 
 .DESCRIPTION
-  Imports all device configurations in a folder to a specified tenant
+  Downloads the Microsoft Edge Enterprise MSI for the specified channel and installs it.
 
 .PARAMETER Channel
   Channel to download, Valid Options are: Dev, Beta, Stable, EdgeUpdate, Policy.
@@ -28,6 +28,7 @@
 .NOTES
   Version:        1.0
   Author:         Mikael Nystrom
+  Twitter:        @mikael_nystrom
   Creation Date:  2021-12-16
 
   Version history:
@@ -35,10 +36,14 @@
 
   Added the function to "install"
 
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
+
 .EXAMPLE
   
   Download the latest version for the Beta channel and overwrite any existing file
-  .\Get-EdgeEnterpriseMSI.ps1 -Channel Beta -Folder D:\SourceCode\PowerShell\Div -Force
+  .\Get-TSxEdgeEnterpriseMSIAndInstall.ps1 -Channel Beta -Folder D:\Sources -Force
 
 #>
 [CmdletBinding()]

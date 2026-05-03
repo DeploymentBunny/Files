@@ -1,17 +1,12 @@
-﻿Function New-WimReport{
+Function New-WimReport{
 <#
 .Synopsis
     Get data from WIM file
 .DESCRIPTION
-    Created: 2015-11-25
-    Version: 1.0
-
-    Author : Mikael Nystrom
-    Twitter: @mikael_nystrom
-    Blog   : http://deploymentbunny.com
-
-    Disclaimer: This script is provided "AS IS" with no warranties, confers no rights and 
-    is not supported by the author.
+    Mounts a WIM index read-only and collects image metadata including name, version,
+    architecture, injected drivers, enabled optional features, installed packages, and
+    provisioned AppX packages. The image is dismounted after collection and a report
+    object is returned.
 .EXAMPLE
     New-WimReport -MountFolder C:\mount -WIMFile "E:\MDTBuildLab\Captures\REFWS2012R2-002.wim" -Index 1
 

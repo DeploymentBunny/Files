@@ -1,10 +1,10 @@
 <#
 .Synopsis
-   Short description.
+   Install Remote Server Administration Tools (RSAT).
 .DESCRIPTION
-   Long description
+   Installs Remote Server Administration Tools (RSAT).
 .EXAMPLE
-
+    .\Install-RSAT.ps1
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

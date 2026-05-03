@@ -1,7 +1,7 @@
-﻿<#
+<#
  Install Wrapper 2.1
  Author: Mikael Nystrom
- http://www.deploymentbunny.com 
+ https://www.deploymentbunny.com 
 #>
 
 [CmdletBinding(SupportsShouldProcess=$true)]

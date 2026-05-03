@@ -1,17 +1,17 @@
-﻿<#
+<#
 .SYNOPSIS
     Install RSAT from FOD media, instead of the default "online" way
 .DESCRIPTION
-    The script will get all RSAT FOD components and install the from media. For this to work, you need to download the FOD media and 
-    extract it and store the files in a subfolder where this script is located named Source. The script works standalone, integrateded in MDT or ConfigMgr
+    The script will get all RSAT FOD components and install them from media. For this to work, you need to download the FOD media and 
+    extract it and store the files in a subfolder where this script is located named Source. The script works standalone, integrated in MDT or ConfigMgr
 .EXAMPLE
-    Install-RSATToolsfor1809.ps1
+    .\Install-RSATToolsfor1809.ps1
 .NOTES
         ScriptName: Install-RSATToolsfor1809.ps1
         Author:     Mikael Nystrom
         Twitter:    @mikael_nystrom
-        Email:      mikael.nystrom@truesec.se
-        Blog:       https://deploymentbunny.com
+        Email:      deploymentbunny@outlook.com
+        Blog:       https://www.deploymentbunny.com
 
     Version History
     1.0.0 - Script created [01/16/2019 13:12:16]
@@ -35,6 +35,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
 #>
 
 [cmdletbinding(SupportsShouldProcess=$True)]
