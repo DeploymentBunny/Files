@@ -48,41 +48,86 @@ Function Get-TSxTest {
     Return "OK"
 }
 Function Get-TSxOSVersion([ref]$OSv) {
-    $OS = Get-WmiObject -Class Win32_OperatingSystem | Select *
-    Switch -Regex ($OS.Version)
+    $OS = Get-WmiObject -Class Win32_OperatingSystem
+    $Caption = ($OS.Caption -replace '^Microsoft\s+', '').Trim()
+    $CurrentVersionPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+    $CurrentVersion = $null
+
+    if(Test-Path -Path $CurrentVersionPath)
     {
-    "6.1"
-        {If($OS.ProductType -eq 1)
-            {$OSv.value = "Windows 7 SP1"}
-                Else
-            {$OSv.value = "Windows Server 2008 R2"}
+        $CurrentVersion = Get-ItemProperty -Path $CurrentVersionPath
+    }
+
+    if($OS.ProductType -eq 1)
+    {
+        switch -Regex ($Caption)
+        {
+            '^Windows 7' {
+                if($OS.ServicePackMajorVersion -gt 0)
+                {
+                    $OSv.Value = "Windows 7 SP$($OS.ServicePackMajorVersion)"
+                }
+                else
+                {
+                    $OSv.Value = 'Windows 7'
+                }
+                return
+            }
+            '^Windows 8\.1' {
+                $OSv.Value = 'Windows 8.1'
+                return
+            }
+            '^Windows 8' {
+                $OSv.Value = 'Windows 8'
+                return
+            }
+            '^Windows (10|11)' {
+                $DisplayVersion = $null
+                if($CurrentVersion)
+                {
+                    if($CurrentVersion.DisplayVersion)
+                    {
+                        $DisplayVersion = $CurrentVersion.DisplayVersion
+                    }
+                    elseif($CurrentVersion.ReleaseId)
+                    {
+                        $DisplayVersion = $CurrentVersion.ReleaseId
+                    }
+                }
+
+                if($DisplayVersion)
+                {
+                    $OSv.Value = "$($Matches[0]) $DisplayVersion"
+                }
+                else
+                {
+                    $OSv.Value = $Matches[0]
+                }
+                return
+            }
         }
-    "6.2"
-        {If($OS.ProductType -eq 1)
-            {$OSv.value = "Windows 8"}
-                Else
-            {$OSv.value = "Windows Server 2012"}
+    }
+    else
+    {
+        if($Caption -match '^(Windows Server (?:\d{4}|2008 R2|2012 R2|2003(?: R2)?))')
+        {
+            $OSv.Value = $Matches[1]
+            return
         }
-    "6.3"
-        {If($OS.ProductType -eq 1)
-            {$OSv.value = "Windows 8.1"}
-                Else
-            {$OSv.value = "Windows Server 2012 R2"}
-        }
-    "10.0.14"
-        {If($OS.ProductType -eq 1)
-            {$OSv.value = "Windows 10 1607"}
-                Else
-            {$OSv.value = "Windows Server 2016"}
-        }
-    "10.0.17"
-        {If($OS.ProductType -eq 1)
-            {$OSv.value = "Windows 10 1809"}
-                Else
-            {$OSv.value = "Windows Server 2019"}
-        }
-    DEFAULT { "Version not listed" }
-    } 
+    }
+
+    if(-not [string]::IsNullOrWhiteSpace($Caption))
+    {
+        $OSv.Value = $Caption
+    }
+    elseif($CurrentVersion -and $CurrentVersion.ProductName)
+    {
+        $OSv.Value = ($CurrentVersion.ProductName -replace '^Microsoft\s+', '').Trim()
+    }
+    else
+    {
+        $OSv.Value = 'Unknown'
+    }
 }
 Function Get-TSxOSSKU {
     $Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Server\ServerLevels\'
