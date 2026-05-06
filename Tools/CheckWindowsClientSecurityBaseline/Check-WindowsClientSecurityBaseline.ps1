@@ -27,6 +27,7 @@
     - Microsoft Defender EDR service
     - SMB1 disabled
     - NTLM hardening
+    - Multicast Name Resolution (LLMNR) disabled
     - Windows Defender Firewall profiles
     - Active inbound firewall rules
     - Windows build support
@@ -36,7 +37,7 @@
     .\Check-WindowsClientSecurityBaseline.ps1 -OutputPath C:\Temp\SecurityChecks
 .Notes
     ScriptName: Check-WindowsClientSecurityBaseline.ps1
-    Version:    1.4.0
+    Version:    1.5.0
     Updated:    2026-05-06
     Author:     Mikael Nystrom
     Blog:       https://www.deploymentbunny.com
@@ -599,6 +600,22 @@ try {
     }
     catch {
         Add-Result -Check 'NTLM Hardening' -Status 'Unknown' -Details "Unable to evaluate NTLM settings. $($_.Exception.Message)" -RawValue $null
+    }
+
+    try {
+        $enableMulticast = (Get-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -ErrorAction SilentlyContinue).EnableMulticast
+        if ($null -eq $enableMulticast) {
+            Add-Result -Check 'Multicast Name Resolution' -Status 'False' -Details 'Multicast Name Resolution (LLMNR) policy is not configured; LLMNR is active by default.' -RawValue $enableMulticast
+        }
+        elseif ($enableMulticast -eq 0) {
+            Add-Result -Check 'Multicast Name Resolution' -Status 'True' -Details 'Multicast Name Resolution (LLMNR) is disabled via policy.' -RawValue $enableMulticast
+        }
+        else {
+            Add-Result -Check 'Multicast Name Resolution' -Status 'False' -Details "Multicast Name Resolution (LLMNR) is enabled (EnableMulticast=$enableMulticast)." -RawValue $enableMulticast
+        }
+    }
+    catch {
+        Add-Result -Check 'Multicast Name Resolution' -Status 'Unknown' -Details "Unable to read Multicast Name Resolution setting. $($_.Exception.Message)" -RawValue $null
     }
 
     $activeFirewallProfiles = @()

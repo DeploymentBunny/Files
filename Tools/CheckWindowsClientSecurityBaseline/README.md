@@ -4,10 +4,10 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Version
 
-- Toolkit Version: 1.4.0
+- Toolkit Version: 1.5.0
 - Last Updated: 2026-05-06
-- Baseline Script: 1.4.0
-- Remediation Script: 1.4.0
+- Baseline Script: 1.5.0
+- Remediation Script: 1.5.0
 
 ## Versioning Policy
 
@@ -20,16 +20,9 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Latest Update
 
-- Details messages were rewritten to expand acronyms in plain language for easier readability.
-- Example expansions in output details include:
-  - UEFI as Unified Extensible Firmware Interface
-  - TPM as Trusted Platform Module
-  - WDAC as Windows Defender Application Control
-  - VBS as Virtualization-Based Security
-  - HVCI as Hypervisor-Protected Code Integrity
-  - EDR as Endpoint Detection and Response
-  - SMB1 as Server Message Block version 1
-  - NTLM as NT LAN Manager
+- Added Multicast Name Resolution (LLMNR) check to baseline assessment script.
+- Added `-DisableMulticastNameResolution` remediation switch.
+- `-DisableMulticastNameResolution` is now included in the `-HardenRecommended` preset.
 
 ## Contents
 
@@ -108,6 +101,7 @@ Evaluates core security controls and returns objects with this shape:
 - NTLM Hardening
 - Windows Firewall Profiles (active profile(s))
 - Active Inbound Firewall Rules (active profile(s))
+- Multicast Name Resolution
 - AppLocker
 - Json File (output artifact path)
 - Text File (output artifact path)
@@ -178,6 +172,7 @@ Core control switches:
 - `-EnableFirewallProfiles`
 - `-SetInboundDefaultBlock`
 - `-DisableAllInboundFirewallRules`
+- `-DisableMulticastNameResolution`
 
 Automation and presets:
 
@@ -204,6 +199,7 @@ Common:
 - Set cached logons count to 1
 - Disable SMB1
 - Harden NTLM settings
+- Disable Multicast Name Resolution (LLMNR)
 
 ### Baseline-Driven Auto Remediation
 
@@ -240,6 +236,7 @@ $b = .\Check-WindowsClientSecurityBaseline.ps1
 | NTLM Hardening | `-HardenNTLM` |
 | Windows Firewall Profiles | `-EnableFirewallProfiles` |
 | Active Inbound Firewall Rules | `-SetInboundDefaultBlock` |
+| Multicast Name Resolution | `-DisableMulticastNameResolution` |
 
 ## Operational Guidance
 

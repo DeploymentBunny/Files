@@ -20,6 +20,7 @@
     - Enable Windows Defender Firewall profiles
     - Set default inbound firewall action to Block
     - Disable all enabled inbound firewall rules
+    - Disable Multicast Name Resolution (LLMNR)
 
     Preset actions:
     - HardenRecommended (curated safe subset)
@@ -36,7 +37,7 @@
     .\Remediate-WindowsClientSecurityBaseline.ps1 -BaselineResult $r -AutoFromBaseline
 .Notes
     ScriptName: Remediate-WindowsClientSecurityBaseline.ps1
-    Version:    1.4.0
+    Version:    1.5.0
     Updated:    2026-05-06
     Author:     Mikael Nystrom
     Blog:       https://www.deploymentbunny.com
@@ -99,6 +100,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [switch]$DisableAllInboundFirewallRules,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$DisableMulticastNameResolution,
 
     [Parameter(Mandatory = $false)]
     [string]$OutputPath = "$env:ProgramData\WindowsClientSecurityBaseline"
@@ -455,6 +459,10 @@ function Invoke-SetInboundDefaultBlock {
     }
 }
 
+function Invoke-DisableMulticastNameResolution {
+    Set-RegistryDwordValue -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -Value 0 -ActionName 'Disable Multicast Name Resolution'
+}
+
 function Invoke-DisableAllInboundFirewallRules {
     $actionName = 'Disable All Inbound Firewall Rules'
     try {
@@ -498,6 +506,7 @@ function Enable-FromBaseline {
     if ($problemChecks -contains 'NTLM Hardening') { $script:HardenNTLM = $true }
     if ($problemChecks -contains 'Windows Firewall Profiles') { $script:EnableFirewallProfiles = $true }
     if ($problemChecks -contains 'Active Inbound Firewall Rules') { $script:SetInboundDefaultBlock = $true }
+    if ($problemChecks -contains 'Multicast Name Resolution') { $script:DisableMulticastNameResolution = $true }
 }
 
 try {
@@ -546,7 +555,8 @@ try {
         $SetCachedLogonsCount1 = $true
         $DisableSMB1 = $true
         $HardenNTLM = $true
-        Write-Log -Message 'Applied HardenRecommended preset: Defender RTP/EDR, firewall hardening, LSASS protection, WDigest disable, cached logons count 1, SMB1 disable, and NTLM hardening.'
+        $DisableMulticastNameResolution = $true
+        Write-Log -Message 'Applied HardenRecommended preset: Defender RTP/EDR, firewall hardening, LSASS protection, WDigest disable, cached logons count 1, SMB1 disable, NTLM hardening, and multicast name resolution disable.'
     }
 
     if ($EnableVBS) { Invoke-EnableVBS }
@@ -563,6 +573,7 @@ try {
     if ($EnableFirewallProfiles) { Invoke-EnableFirewallProfiles }
     if ($SetInboundDefaultBlock) { Invoke-SetInboundDefaultBlock }
     if ($DisableAllInboundFirewallRules) { Invoke-DisableAllInboundFirewallRules }
+    if ($DisableMulticastNameResolution) { Invoke-DisableMulticastNameResolution }
 
     if (
         -not $EnableVBS -and
@@ -579,6 +590,7 @@ try {
         -not $EnableFirewallProfiles -and
         -not $SetInboundDefaultBlock -and
         -not $DisableAllInboundFirewallRules -and
+        -not $DisableMulticastNameResolution -and
         -not $HardenRecommended
     ) {
         Add-ActionResult -Action 'Remediation Selection' -Status 'Skipped' -Details 'No remediation switches were selected.'
