@@ -1,5 +1,9 @@
 # Set-TSxTimesync
 
+## Version
+- Script Version: 1.1.0
+- Last Updated: 2026-05-07
+
 ## Purpose
 Set-TSxTimesync configures Windows Time (W32Time) to use a specified external NTP source and then forces a synchronization.
 
@@ -14,13 +18,15 @@ Set-TSxTimesync configures Windows Time (W32Time) to use a specified external NT
 4. Detects whether the machine is virtual.
 5. If virtual, disables `VMICTimeProvider` to avoid host/guest time sync conflicts.
 6. Restarts the `W32Time` service.
-7. Runs `w32tm /resync` and validates the command exit code.
+7. Runs `w32tm /resync`.
+8. Writes a timestamped log file to `%TEMP%` and supports `-Verbose` and `-WhatIf`.
 
 ## Parameters
 ### TimeSource
 - Type: String
-- Required: Yes
+- Required: No
 - Description: FQDN or host name of the NTP server to use.
+- Default: `pool.ntp.org`
 
 Example values:
 - `se.pool.ntp.org`
@@ -51,7 +57,9 @@ Example values:
 ## Expected Result
 - Registry values for W32Time are updated.
 - `W32Time` restarts successfully.
-- `w32tm /resync` completes with exit code `0`.
+- `w32tm /resync` is invoked.
+- A log file is written to `%TEMP%`:
+  - `Set-TSxTimesync_<yyyyMMdd_HHmmss>.log`
 
 ## Verify Configuration
 ```powershell
@@ -61,8 +69,8 @@ w32tm /query /configuration
 ```
 
 ## Error Behavior
-- The script stops on errors (`$ErrorActionPreference = 'Stop'`).
-- Failures are written as errors and rethrown for calling tools/pipelines.
+- The script exits with code `1` if not started in an elevated PowerShell session.
+- Terminating errors are captured, logged, and rethrown for calling tools/pipelines.
 
 ## Troubleshooting
 - Access denied:
