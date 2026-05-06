@@ -3,31 +3,25 @@
     GUI launcher for local or remote execution of Invoke-TSxDeDupJob.ps1.
 
 .DESCRIPTION
-    Invoke-TSxDeDupJobUI provides a Windows Forms interface that:
-    - Starts without elevation.
-    - Shows an "Elevate (Admin)" button when running as a standard user.
-      Clicking the button relaunches the UI as Administrator via UAC.
-    - Supports local execution and remote server execution via PowerShell remoting.
-    - Supports selecting a target server directly in the UI.
-    - Supports selecting alternate credentials for remote execution.
-    - Adds a Show Running Jobs button to check for currently running dedup jobs.
-    - Requires local Administrator elevation only when running against the local computer.
-    - Runs Invoke-TSxDeDupJob.ps1 asynchronously.
-    - Displays script output, warnings, errors, and live job progress in a UI output pane.
-    - Supports a Verbose toggle to show or hide verbose messages.
-    - Persists settings to %LOCALAPPDATA%\DeploymentBunny.
-    - Writes a per-run log file in %TEMP%.
-    - Allows the UI window to be closed while the script continues running in the background.
+        Invoke-TSxDeDupJobUI provides a Windows Forms front end for local and
+        remote execution of Invoke-TSxDeDupJob.ps1. The UI starts without elevation,
+        supports optional relaunch as Administrator, supports target server and
+        credential selection, and runs operations asynchronously in a background
+        runspace. It exposes two operations (Run DeDup Jobs and Show Running Jobs),
+        shows output/warnings/errors/progress in real time, supports verbose output
+        toggling, persists UI settings in %LOCALAPPDATA%\DeploymentBunny, writes
+        per-run logs to %TEMP%, and performs graceful cleanup when the form closes.
 
 .EXAMPLE
     .\Invoke-TSxDeDupJobUI.ps1
 
 .NOTES
     FileName:    Invoke-TSxDeDupJobUI.ps1
+    Version:     1.1.0
     Author:      Mikael Nystrom
     Contact:     deploymentbunny@outlook.com
     Created:     2026-04-23
-    Updated:     2026-04-28
+    Updated:     2026-05-06
     Twitter:     @mikael_nystrom
 
     Disclaimer:

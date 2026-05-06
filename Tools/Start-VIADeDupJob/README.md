@@ -1,11 +1,22 @@
-# Start-VIADeDupJob
+# TSx DeDup Job Toolkit
+
+## Version
+- Toolkit Version: 1.1.0
+- Last Updated: 2026-05-06
+- Script: Invoke-TSxDeDupJob.ps1 (1.1.0)
+- Script: Invoke-TSxDeDupJobUI.ps1 (1.1.0)
+
+## Latest Changes
+- Refreshed script header descriptions for both scripts.
+- Added explicit version metadata to script headers.
+- Synchronized documentation wording with current behavior.
 
 ## Scripts
 - `Invoke-TSxDeDupJob.ps1` — runs dedup jobs from the command line.
 - `Invoke-TSxDeDupJobUI.ps1` — Windows Forms launcher for the dedup script.
 
 ## Purpose
-Runs Windows Data Deduplication maintenance jobs on all dedup-enabled volumes.
+Runs Windows Data Deduplication maintenance jobs on all dedup-enabled volumes after validating prerequisites.
 
 Also supports reporting only actively running dedup jobs without starting new jobs.
 

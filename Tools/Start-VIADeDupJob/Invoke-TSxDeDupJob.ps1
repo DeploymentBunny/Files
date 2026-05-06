@@ -2,22 +2,24 @@
 .SYNOPSIS
     Run Data Deduplication jobs on all dedup-enabled volumes.
 .DESCRIPTION
-    Invoke-TSxDeDupJob finds all volumes with Data Deduplication enabled and
-    runs Optimization, Garbage Collection (Full), and Scrubbing (Full) jobs
-    sequentially on each volume, waiting for each job to finish before starting
-    the next. Final dedup status is reported via Get-DedupStatus.
+    Invoke-TSxDeDupJob validates prerequisites, self-elevates when required,
+    and discovers all volumes with Data Deduplication enabled. It runs
+    Optimization, Garbage Collection (Full), and Scrubbing (Full) sequentially
+    per volume, waiting for each job to complete before continuing. Final
+    deduplication status is collected via Get-DedupStatus.
     When -Report is specified, the script only reports actively running dedup
-    jobs and exits without starting any new jobs.
+    jobs and exits without starting new jobs.
 .EXAMPLE
     .\Invoke-TSxDeDupJob.ps1
 .EXAMPLE
     .\Invoke-TSxDeDupJob.ps1 -Report
 .NOTES
     FileName:    Invoke-TSxDeDupJob.ps1
+    Version:     1.1.0
     Author:      Mikael Nystrom
     Contact:     deploymentbunny@outlook.com
     Created:     2017-01-01
-    Updated:     2026-04-28
+    Updated:     2026-05-06
     Web:         https://www.deploymentbunny.com
     Twitter:     @mikael_nystrom
 
