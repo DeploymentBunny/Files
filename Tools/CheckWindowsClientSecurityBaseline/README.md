@@ -4,9 +4,9 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Version
 
-- Toolkit Version: 1.5.0
+- Toolkit Version: 1.6.0
 - Last Updated: 2026-05-06
-- Baseline Script: 1.5.0
+- Baseline Script: 1.6.0
 - Remediation Script: 1.5.0
 
 ## Versioning Policy
@@ -20,9 +20,7 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Latest Update
 
-- Added Multicast Name Resolution (LLMNR) check to baseline assessment script.
-- Added `-DisableMulticastNameResolution` remediation switch.
-- `-DisableMulticastNameResolution` is now included in the `-HardenRecommended` preset.
+- Added `-FalseOnly` switch to the baseline assessment script. When specified, only results with a status that is not `True` (`False`, `Unknown`, `NA`) are returned to the pipeline.
 
 ## Contents
 
@@ -76,6 +74,8 @@ Evaluates core security controls and returns objects with this shape:
   - Default: `$env:ProgramData\WindowsClientSecurityBaseline`
 - `-AsJsonOnly`
   - Present in parameter block for compatibility.
+- `-FalseOnly`
+  - When specified, only results with a status that is not `True` are returned to the pipeline.
 
 ### Checks Implemented
 

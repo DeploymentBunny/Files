@@ -31,13 +31,14 @@
     - Windows Defender Firewall profiles
     - Active inbound firewall rules
     - Windows build support
+    - Use -FalseOnly to return only checks that are not True
 .Example
     .\Check-WindowsClientSecurityBaseline.ps1
 .Example
     .\Check-WindowsClientSecurityBaseline.ps1 -OutputPath C:\Temp\SecurityChecks
 .Notes
     ScriptName: Check-WindowsClientSecurityBaseline.ps1
-    Version:    1.5.0
+    Version:    1.6.0
     Updated:    2026-05-06
     Author:     Mikael Nystrom
     Blog:       https://www.deploymentbunny.com
@@ -54,7 +55,10 @@ param(
     [string]$OutputPath = "$env:ProgramData\WindowsClientSecurityBaseline",
 
     [Parameter(Mandatory = $false)]
-    [switch]$AsJsonOnly
+    [switch]$AsJsonOnly,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$FalseOnly
 )
 
 Set-StrictMode -Version Latest
@@ -798,7 +802,12 @@ try {
     Write-Verbose -Message "JSON report: $jsonFile"
     Write-Verbose -Message "Text report: $txtFile"
 
-    Write-Output $report.Result
+    if ($FalseOnly) {
+        Write-Output ($report.Result | Where-Object { $_.Status -ne 'True' })
+    }
+    else {
+        Write-Output $report.Result
+    }
 
     if ($falseCount -gt 0) {
         exit 2
