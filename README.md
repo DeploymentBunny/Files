@@ -1,6 +1,6 @@
 # Deployment Bunny Script Collection
 
-Welcome to the Deployment Bunny Script Collection. 
+Welcome to the Deployment Bunny Script and Tool Collection. 
 This repository contains deployment and infrastructure automation scripts.
 Blog: http://www.deploymentbunny.com
 Twitter: @mikael_nystrom
