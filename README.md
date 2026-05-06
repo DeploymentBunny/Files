@@ -8,8 +8,8 @@ Twitter: @mikael_nystrom
 ## Summary
 
 - Top-level folder: Tools
-- Total folders under Tools: 91
-- Total script files under Tools: 104
+- Total folders under Tools: 96
+- Total script files under Tools: 117
 
 ## Disk Performance Benchmark Tools
 
@@ -141,6 +141,13 @@ Prerequisites for both scripts:
 - Scripts:
   - Tools/Check-VIAApprovedModel/Check-VIAApprovedModel.ps1: Script for Check VIAApprovedModel.
 
+### Tools/CheckWindowsClientSecurityBaseline
+
+- Description: Assesses and remediates Windows 10/11 client security controls against a defined baseline. Supports checks for UEFI, Secure Boot, TPM, BitLocker, VBS, Credential Guard, HVCI, WDAC, LSA protection, WDigest, SMB1, NTLM hardening, Firewall, Multicast Name Resolution (LLMNR), and more.
+- Scripts:
+  - Tools/CheckWindowsClientSecurityBaseline/Check-WindowsClientSecurityBaseline.ps1: Evaluates core security controls and returns True/False/Unknown/NA results per check. Supports -FalseOnly to return only non-True results.
+  - Tools/CheckWindowsClientSecurityBaseline/Remediate-WindowsClientSecurityBaseline.ps1: Applies configurable remediation for findings from the baseline assessment. Supports -HardenRecommended preset and -AutoFromBaseline automation.
+
 ### Tools/Configure - Windows Client
 
 - Description: Contains scripts and related files for Configure Windows Client tasks.
@@ -182,6 +189,15 @@ Prerequisites for both scripts:
 - Description: Contains scripts and related files for Connect VIARDP tasks.
 - Scripts:
   - Tools/Connect-VIARDP/ConnectVIARDP.psm1: Script for ConnectVIARDP.
+
+### Tools/Convert-TSxWIMToVHD
+
+- Description: Converts WIM images to VHD/VHDX format, with helper scripts for WIM index info and a Windows Forms UI launcher.
+- Scripts:
+  - Tools/Convert-TSxWIMToVHD/Convert-TSxWIM2VHD.ps1: Script for Convert TSxWIM2VHD.
+  - Tools/Convert-TSxWIMToVHD/Convert-TSxWIM2VHDUI.ps1: Script for Convert TSxWIM2VHD UI.
+  - Tools/Convert-TSxWIMToVHD/Get-TSxWimIndexInfo.ps1: Script for Get TSxWimIndexInfo.
+  - Tools/Convert-TSxWIMToVHD/Get-TSxWIMInfo.ps1: Script for Get TSxWIMInfo.
 
 ### Tools/Convert-WIM2VHD
 
@@ -257,6 +273,16 @@ Prerequisites for both scripts:
   - Tools/Enable-NestedHyperV/EnableNestedHyperVSimple.ps1: Script for EnableNestedHyperVSimple.
   - Tools/Enable-NestedHyperV/GetNestedHyperVRedniness.PS1: Script for GetNestedHyperVRedniness.
 
+### Tools/Export-Import Roles and Features Fore Windows Server
+
+- Description: Exports, imports, copies, and deploys Windows Server roles and features, with a Windows Forms UI launcher.
+- Scripts:
+  - Tools/Export-Import Roles and Features Fore Windows Server/Copy-WindowsRolesAndFeatures.ps1: Script for Copy WindowsRolesAndFeatures.
+  - Tools/Export-Import Roles and Features Fore Windows Server/Deploy-WindowsRolesAndFeatures.ps1: Script for Deploy WindowsRolesAndFeatures.
+  - Tools/Export-Import Roles and Features Fore Windows Server/Export-WindowsRolesAndFeatures.ps1: Script for Export WindowsRolesAndFeatures.
+  - Tools/Export-Import Roles and Features Fore Windows Server/Import-WindowsRolesAndFeatures.ps1: Script for Import WindowsRolesAndFeatures.
+  - Tools/Export-Import Roles and Features Fore Windows Server/Invoke-WindowsRolesAndFeaturesUI.ps1: Script for Invoke WindowsRolesAndFeaturesUI.
+
 ### Tools/Export-ModernDriverPackage
 
 - Description: Contains scripts and related files for Export ModernDriverPackage tasks.
@@ -318,6 +344,11 @@ Prerequisites for both scripts:
 - Scripts:
   - Tools/Get-TSxEdgeEnterpriseMSIAndInstall/Get-TSxEdgeEnterpriseMSIAndInstall.ps1: Script for Get TSxEdgeEnterpriseMSIAndInstall.
 
+### Tools/Get-TSxLatestWindowsUpdate
+
+- Description: Contains scripts and related files for Get TSxLatestWindowsUpdate tasks.
+- Scripts: None detected in this folder
+
 ### Tools/Get-TSxMSEdgeNow
 
 - Description: Contains scripts and related files for Get TSxMSEdgeNow tasks.
@@ -359,6 +390,12 @@ Prerequisites for both scripts:
 - Description: Contains scripts and related files for Get WIMInfo tasks.
 - Scripts:
   - Tools/Get-WIMInfo/Get-WimInfo.ps1: Script for Get WimInfo.
+
+### Tools/Get-WindowsClientHealthLogs
+
+- Description: Contains scripts and related files for Get WindowsClientHealthLogs tasks.
+- Scripts:
+  - Tools/Get-WindowsClientHealthLogs/Get-WindowsClientHealthLogs.ps1: Script for Get WindowsClientHealthLogs.
 
 ### Tools/Get-WSUSHealthCheck
 
@@ -571,6 +608,7 @@ Prerequisites for both scripts:
 - Description: Contains scripts and related files for Measure DiskPerf tasks.
 - Scripts:
   - Tools/Measure-DiskPerf/Measure-DiskPerf.ps1: Script for Measure DiskPerf.
+  - Tools/Measure-DiskPerf/Measure-DiskPerfwUI.ps1: Script for Measure DiskPerf with UI.
 
 ### Tools/MonitorMDT
 
@@ -643,10 +681,10 @@ Prerequisites for both scripts:
 
 ### Tools/Start-VIADeDupJob
 
-- Description: Contains scripts and related files for Start VIADeDupJob tasks.
+- Description: Runs Windows Data Deduplication maintenance jobs (Optimization, Garbage Collection, Scrubbing) on all dedup-enabled volumes. Includes a Windows Forms UI launcher with local and remote server support.
 - Scripts:
-  - Tools/Start-VIADeDupJob/Invoke-TSxDeDupJob.ps1: Script for Invoke TSxDeDupJob.
-  - Tools/Start-VIADeDupJob/Invoke-TSxDeDupJobUI.ps1: Script for Invoke TSxDeDupJob UI.
+  - Tools/Start-VIADeDupJob/Invoke-TSxDeDupJob.ps1: Command-line script that runs dedup jobs sequentially per volume and supports -Report mode to show active jobs.
+  - Tools/Start-VIADeDupJob/Invoke-TSxDeDupJobUI.ps1: Windows Forms UI launcher for local and remote execution of Invoke-TSxDeDupJob.ps1.
 
 ### Tools/Test-ModernDriverPackage
 
