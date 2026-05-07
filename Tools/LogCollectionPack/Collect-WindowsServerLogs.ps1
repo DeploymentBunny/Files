@@ -278,7 +278,7 @@ function Invoke-AndSave {
     Invoke-CMD -FilePath $FilePath -Arguments $Arguments -OutFile $OutFile | Out-Null
 }
 
-function Try-ImportModule {
+function Test-ImportModule {
     param([Parameter(Mandatory)][string]$Name)
     try {
         Import-Module $Name -ErrorAction Stop
@@ -519,7 +519,7 @@ if ($roles.IsADDS) {
         Invoke-AndSave -Title 'DFSRDIAG PollAD' -FilePath 'dfsrdiag.exe' -Arguments 'PollAD' -OutFile (Join-Path $adDir 'dfsrdiag_pollad.txt')
     }
 
-    if (Try-ImportModule -Name 'ActiveDirectory') {
+    if (Test-ImportModule -Name 'ActiveDirectory') {
         try { Get-ADDomain | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADDomain.csv') } catch { Write-Warning "Get-ADDomain failed: $_" }
         try { Get-ADForest | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADForest.csv') } catch { Write-Warning "Get-ADForest failed: $_" }
         try {
@@ -536,7 +536,7 @@ if ($roles.IsDNS) {
     $dnsDir = Join-Path $roleDir 'DNSServer'
     $null = New-Item -ItemType Directory -Force -Path $dnsDir | Out-Null
 
-    if (Try-ImportModule -Name 'DnsServer') {
+    if (Test-ImportModule -Name 'DnsServer') {
         try { Get-DnsServer | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $dnsDir 'DnsServer.csv') } catch {}
         try { Get-DnsServerSetting -All | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $dnsDir 'DnsServerSetting.csv') } catch {}
         try { Get-DnsServerForwarder | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $dnsDir 'DnsForwarders.csv') } catch {}
@@ -571,7 +571,7 @@ if ($roles.IsDHCP) {
     # Netsh dump is extremely useful for full config (read-only)
     Invoke-AndSave -Title 'NETSH DHCP dump' -FilePath 'netsh.exe' -Arguments 'dhcp server dump' -OutFile (Join-Path $dhcpDir 'dhcp_netsh_dump.txt')
 
-    if (Try-ImportModule -Name 'DhcpServer') {
+    if (Test-ImportModule -Name 'DhcpServer') {
         try { Get-DhcpServerSetting | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $dhcpDir 'DhcpServerSetting.csv') } catch {}
         try { Get-DhcpServerv4Scope | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $dhcpDir 'DhcpV4Scopes.csv') } catch {}
         try { Get-DhcpServerv4OptionValue -All | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $dhcpDir 'DhcpV4Options_All.csv') } catch {}
