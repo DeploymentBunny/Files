@@ -185,6 +185,36 @@ The JSON output includes:
 - `UNKNOWN`
   - Collect the generated files and escalate for deeper review
 
+## Troubleshooting
+
+### BLOCKED
+
+Common causes:
+- firmware or BIOS is out of date
+- Secure Boot policy prerequisites are not met
+- device configuration is preventing Secure Boot servicing from proceeding
+- servicing events `1802` or `1803` indicate an update block condition
+
+What to check:
+- update system firmware from the OEM
+- verify the device is running UEFI with Secure Boot enabled
+- review Secure Boot servicing registry values and recent System events
+- confirm the `Secure-Boot-Update` scheduled task exists and is enabled
+
+### FAILED
+
+Common causes:
+- Secure Boot servicing previously started but did not complete successfully
+- Windows servicing health problems affected the update workflow
+- required update components are missing or damaged
+- servicing events `1795` or `1796` indicate a failure condition
+
+What to check:
+- review failure events and the generated log/JSON output
+- run OS health checks such as `sfc /scannow` and DISM repair commands
+- install the latest cumulative update and reboot
+- rerun the script after remediation to confirm status changes
+
 ## Requirements
 
 - Windows with PowerShell 5.1 or later
