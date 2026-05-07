@@ -17,6 +17,11 @@
     - Enable Microsoft Defender EDR service
     - Disable SMB1
     - Harden NTLM settings
+    - Enable UAC
+    - Enable SmartScreen
+    - Enable Defender Antivirus
+    - Remove current user from local Administrators
+    - Remove additional local users from local Administrators
     - Enable Windows Defender Firewall profiles
     - Set default inbound firewall action to Block
     - Disable all enabled inbound firewall rules
@@ -37,8 +42,8 @@
     .\Remediate-WindowsClientSecurityBaseline.ps1 -BaselineResult $r -AutoFromBaseline
 .Notes
     ScriptName: Remediate-WindowsClientSecurityBaseline.ps1
-    Version:    1.5.0
-    Updated:    2026-05-06
+    Version:    1.6.8
+    Updated:    2026-05-07
     Author:     Mikael Nystrom
     Blog:       https://www.deploymentbunny.com
     Disclaimer:
@@ -91,6 +96,21 @@ param(
 
     [Parameter(Mandatory = $false)]
     [switch]$HardenNTLM,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableUAC,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableSmartScreen,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableDefenderAntivirus,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$RemoveCurrentUserFromLocalAdministrators,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$RemoveExtraLocalUsersFromLocalAdministrators,
 
     [Parameter(Mandatory = $false)]
     [switch]$EnableFirewallProfiles,
@@ -407,6 +427,120 @@ function Invoke-HardenNTLM {
     Set-RegistryDwordValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0' -Name 'RestrictReceivingNTLMTraffic' -Value 2 -ActionName 'Harden NTLM (RestrictReceivingNTLMTraffic)'
 }
 
+function Invoke-EnableUAC {
+    Set-RegistryDwordValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'EnableLUA' -Value 1 -ActionName 'Enable UAC (EnableLUA)'
+    Set-RegistryDwordValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'ConsentPromptBehaviorAdmin' -Value 5 -ActionName 'Enable UAC (ConsentPromptBehaviorAdmin)'
+    Set-RegistryDwordValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'PromptOnSecureDesktop' -Value 1 -ActionName 'Enable UAC (PromptOnSecureDesktop)'
+}
+
+function Invoke-EnableSmartScreen {
+    Set-RegistryDwordValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableSmartScreen' -Value 1 -ActionName 'Enable SmartScreen (EnableSmartScreen)'
+    Set-RegistryStringValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'ShellSmartScreenLevel' -Value 'Block' -ActionName 'Enable SmartScreen (ShellSmartScreenLevel)'
+}
+
+function Invoke-EnableDefenderAntivirus {
+    $actionName = 'Enable Defender Antivirus'
+    try {
+        Set-RegistryDwordValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender' -Name 'DisableAntiSpyware' -Value 0 -ActionName 'Enable Defender Antivirus (DisableAntiSpyware=0)'
+
+        $service = Get-Service -Name 'WinDefend' -ErrorAction SilentlyContinue
+        if ($null -eq $service) {
+            Add-ActionResult -Action $actionName -Status 'Failed' -Details 'Defender Antivirus service (WinDefend) was not found.'
+            return
+        }
+
+        if ($service.StartType -eq 'Disabled') {
+            if ($WhatIfPreference) {
+                Add-ActionResult -Action $actionName -Status 'Skipped' -Details 'WhatIf: would set WinDefend startup type to Automatic.'
+            }
+            else {
+                Set-Service -Name 'WinDefend' -StartupType Automatic -ErrorAction Stop
+            }
+        }
+
+        $service = Get-Service -Name 'WinDefend' -ErrorAction Stop
+        if ($service.Status -eq 'Running') {
+            Add-ActionResult -Action $actionName -Status 'NoChange' -Details 'Defender Antivirus service (WinDefend) is already running.'
+            return
+        }
+
+        if ($WhatIfPreference) {
+            Add-ActionResult -Action $actionName -Status 'Skipped' -Details 'WhatIf: would start Defender Antivirus service (WinDefend).'
+        }
+        else {
+            Start-Service -Name 'WinDefend' -ErrorAction Stop
+            Add-ActionResult -Action $actionName -Status 'Changed' -Details 'Started Defender Antivirus service (WinDefend).'
+        }
+    }
+    catch {
+        Add-ActionResult -Action $actionName -Status 'Failed' -Details $_.Exception.Message
+    }
+}
+
+function Invoke-RemoveCurrentUserFromLocalAdministrators {
+    $actionName = 'Remove Current User from Local Administrators'
+    try {
+        $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $members = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction Stop)
+        $isMember = @($members | Where-Object { $_.Name -eq $currentUser }).Count -gt 0
+
+        if (-not $isMember) {
+            Add-ActionResult -Action $actionName -Status 'NoChange' -Details ("Current user {0} is not a member of local Administrators." -f $currentUser)
+            return
+        }
+
+        if ($WhatIfPreference) {
+            Add-ActionResult -Action $actionName -Status 'Skipped' -Details ("WhatIf: would remove {0} from local Administrators." -f $currentUser)
+        }
+        else {
+            Remove-LocalGroupMember -Group 'Administrators' -Member $currentUser -ErrorAction Stop
+            Add-ActionResult -Action $actionName -Status 'Changed' -Details ("Removed {0} from local Administrators." -f $currentUser)
+        }
+    }
+    catch {
+        Add-ActionResult -Action $actionName -Status 'Failed' -Details $_.Exception.Message
+    }
+}
+
+function Invoke-RemoveExtraLocalUsersFromLocalAdministrators {
+    $actionName = 'Remove Extra Local Users from Local Administrators'
+    try {
+        $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $members = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction Stop)
+
+        $removableMembers = @(
+            $members | Where-Object {
+                $_.ObjectClass -eq 'User' -and
+                $_.PrincipalSource -eq 'Local' -and
+                $_.Name -ne $currentUser -and
+                $_.Name -notmatch ('^' + [regex]::Escape($env:COMPUTERNAME + '\\Administrator') + '$')
+            }
+        )
+
+        if ($removableMembers.Count -eq 0) {
+            Add-ActionResult -Action $actionName -Status 'NoChange' -Details 'No additional local user members were found in local Administrators.'
+            return
+        }
+
+        if ($WhatIfPreference) {
+            $names = @($removableMembers | Select-Object -ExpandProperty Name) -join ', '
+            Add-ActionResult -Action $actionName -Status 'Skipped' -Details ("WhatIf: would remove local Administrators member(s): {0}" -f $names)
+            return
+        }
+
+        $removed = @()
+        foreach ($member in $removableMembers) {
+            Remove-LocalGroupMember -Group 'Administrators' -Member $member.Name -ErrorAction Stop
+            $removed += $member.Name
+        }
+
+        Add-ActionResult -Action $actionName -Status 'Changed' -Details ("Removed local Administrators member(s): {0}" -f ($removed -join ', '))
+    }
+    catch {
+        Add-ActionResult -Action $actionName -Status 'Failed' -Details $_.Exception.Message
+    }
+}
+
 function Invoke-EnableFirewallProfiles {
     $actionName = 'Enable Firewall Profiles'
     try {
@@ -491,22 +625,48 @@ function Enable-FromBaseline {
         [array]$Results
     )
 
-    $problemChecks = @($Results | Where-Object { $_.Status -in @('False', 'Unknown') } | Select-Object -ExpandProperty Check -Unique)
+    $riskWhenTrueChecks = @(
+        'Current User member of Local Administrators group?',
+        'Extra Local Users in Administrators group?',
+        'Active Inbound Firewall rules in current profile?'
+    )
 
-    if ($problemChecks -contains 'VBS') { $script:EnableVBS = $true }
-    if ($problemChecks -contains 'Credential Guard') { $script:EnableCredentialGuard = $true }
-    if ($problemChecks -contains 'HVCI (Memory Integrity)') { $script:EnableHVCI = $true }
-    if ($problemChecks -contains 'LSA Protection (RunAsPPL)') { $script:EnableLsaProtection = $true }
-    if ($problemChecks -contains 'LSASS Protected Process') { $script:EnableLsassProtectedProcess = $true }
-    if ($problemChecks -contains 'WDigest Credential Caching') { $script:DisableWDigestCredentialCaching = $true }
-    if ($problemChecks -contains 'Cached Logons Count') { $script:SetCachedLogonsCount1 = $true }
-    if ($problemChecks -contains 'Defender Real-Time Protection') { $script:EnableDefenderRealtimeProtection = $true }
-    if ($problemChecks -contains 'Defender EDR Service') { $script:EnableDefenderEdrService = $true }
-    if ($problemChecks -contains 'SMB1') { $script:DisableSMB1 = $true }
-    if ($problemChecks -contains 'NTLM Hardening') { $script:HardenNTLM = $true }
-    if ($problemChecks -contains 'Windows Firewall Profiles') { $script:EnableFirewallProfiles = $true }
-    if ($problemChecks -contains 'Active Inbound Firewall Rules') { $script:SetInboundDefaultBlock = $true }
-    if ($problemChecks -contains 'Multicast Name Resolution') { $script:DisableMulticastNameResolution = $true }
+    $problemChecks = @(
+        $Results |
+            Where-Object {
+                ($_.Status -in @('False', 'Unknown')) -or
+                (($_.Check -in $riskWhenTrueChecks) -and ($_.Status -eq 'True'))
+            } |
+            Select-Object -ExpandProperty Check -Unique
+    )
+
+    if ($problemChecks -contains 'VBS enabled?') { $script:EnableVBS = $true }
+    if ($problemChecks -contains 'Credential Guard running?') { $script:EnableCredentialGuard = $true }
+    if ($problemChecks -contains 'HVCI (Memory Integrity) running?') { $script:EnableHVCI = $true }
+    if ($problemChecks -contains 'LSA Protection enabled?') { $script:EnableLsaProtection = $true }
+    if ($problemChecks -contains 'LSASS Protected Process enabled?') { $script:EnableLsassProtectedProcess = $true }
+    if ($problemChecks -contains 'WDigest Credential Caching disabled?') { $script:DisableWDigestCredentialCaching = $true }
+    if ($problemChecks -contains 'Cached Logons Count less or equal to 1?') { $script:SetCachedLogonsCount1 = $true }
+    if ($problemChecks -contains 'Defender Real-Time Protection running?') { $script:EnableDefenderRealtimeProtection = $true }
+    if ($problemChecks -contains 'Defender EDR Service running?') { $script:EnableDefenderEdrService = $true }
+    if ($problemChecks -contains 'SMB1 Disabled?') { $script:DisableSMB1 = $true }
+    if (
+        $problemChecks -contains 'NTLM LmCompatibilityLevel Hardened?' -or
+        $problemChecks -contains 'NTLM Restrict Sending Traffic ok?' -or
+        $problemChecks -contains 'NTLM Restrict Receiving Traffic ok?'
+    ) { $script:HardenNTLM = $true }
+    if ($problemChecks -contains 'UAC Enabled?') { $script:EnableUAC = $true }
+    if ($problemChecks -contains 'SmartScreen') { $script:EnableSmartScreen = $true }
+    if ($problemChecks -contains 'Defender Antivirus running?') { $script:EnableDefenderAntivirus = $true }
+    if ($problemChecks -contains 'Current User member of Local Administrators group?') { $script:RemoveCurrentUserFromLocalAdministrators = $true }
+    if ($problemChecks -contains 'Extra Local Users in Administrators group?') { $script:RemoveExtraLocalUsersFromLocalAdministrators = $true }
+    if (
+        $problemChecks -contains 'Windows Firewall profile Public enabled?' -or
+        $problemChecks -contains 'Windows Firewall profile Domain Enabled?' -or
+        $problemChecks -contains 'Windows Firewall profile Internal enabled?'
+    ) { $script:EnableFirewallProfiles = $true }
+    if ($problemChecks -contains 'Active Inbound Firewall rules in current profile?') { $script:SetInboundDefaultBlock = $true }
+    if ($problemChecks -contains 'Is Multicast Name Resolution disabled') { $script:DisableMulticastNameResolution = $true }
 }
 
 try {
@@ -555,8 +715,11 @@ try {
         $SetCachedLogonsCount1 = $true
         $DisableSMB1 = $true
         $HardenNTLM = $true
+        $EnableUAC = $true
+        $EnableSmartScreen = $true
+        $EnableDefenderAntivirus = $true
         $DisableMulticastNameResolution = $true
-        Write-Log -Message 'Applied HardenRecommended preset: Defender RTP/EDR, firewall hardening, LSASS protection, WDigest disable, cached logons count 1, SMB1 disable, NTLM hardening, and multicast name resolution disable.'
+        Write-Log -Message 'Applied HardenRecommended preset: Defender RTP/EDR/AV, firewall hardening, LSASS protection, WDigest disable, cached logons count 1, SMB1 disable, NTLM hardening, UAC/SmartScreen enable, and multicast name resolution disable.'
     }
 
     if ($EnableVBS) { Invoke-EnableVBS }
@@ -570,6 +733,11 @@ try {
     if ($EnableDefenderEdrService) { Invoke-EnableDefenderEdrService }
     if ($DisableSMB1) { Invoke-DisableSMB1 }
     if ($HardenNTLM) { Invoke-HardenNTLM }
+    if ($EnableUAC) { Invoke-EnableUAC }
+    if ($EnableSmartScreen) { Invoke-EnableSmartScreen }
+    if ($EnableDefenderAntivirus) { Invoke-EnableDefenderAntivirus }
+    if ($RemoveCurrentUserFromLocalAdministrators) { Invoke-RemoveCurrentUserFromLocalAdministrators }
+    if ($RemoveExtraLocalUsersFromLocalAdministrators) { Invoke-RemoveExtraLocalUsersFromLocalAdministrators }
     if ($EnableFirewallProfiles) { Invoke-EnableFirewallProfiles }
     if ($SetInboundDefaultBlock) { Invoke-SetInboundDefaultBlock }
     if ($DisableAllInboundFirewallRules) { Invoke-DisableAllInboundFirewallRules }
@@ -587,6 +755,11 @@ try {
         -not $EnableDefenderEdrService -and
         -not $DisableSMB1 -and
         -not $HardenNTLM -and
+        -not $EnableUAC -and
+        -not $EnableSmartScreen -and
+        -not $EnableDefenderAntivirus -and
+        -not $RemoveCurrentUserFromLocalAdministrators -and
+        -not $RemoveExtraLocalUsersFromLocalAdministrators -and
         -not $EnableFirewallProfiles -and
         -not $SetInboundDefaultBlock -and
         -not $DisableAllInboundFirewallRules -and

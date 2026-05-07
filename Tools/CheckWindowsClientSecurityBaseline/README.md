@@ -4,10 +4,10 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Version
 
-- Toolkit Version: 1.6.0
-- Last Updated: 2026-05-06
-- Baseline Script: 1.6.0
-- Remediation Script: 1.5.0
+- Toolkit Version: 1.7.26
+- Last Updated: 2026-05-07
+- Baseline Script: 1.7.26
+- Remediation Script: 1.6.8
 
 ## Versioning Policy
 
@@ -20,7 +20,31 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Latest Update
 
-- Added `-FalseOnly` switch to the baseline assessment script. When specified, only results with a status that is not `True` (`False`, `Unknown`, `NA`) are returned to the pipeline.
+- Removed the SmartScreen baseline check.
+- Split NTLM hardening into three separate checks.
+- Removed the `-FalseOnly` parameter from the baseline script.
+- Added the `-IssuesOnly` switch for focused issue output.
+- Extended `-IssuesOnly` to include current user local Administrators membership when status is `True`.
+- Improved NTLM Restrict Sending/Receiving detail text with clear value meanings and not-configured wording.
+- Renamed several baseline check labels for clearer question-style output.
+- Renamed `Workgroup` check label to `Workgroup Joined?`.
+- Renamed Secure Boot/Secure Boot Certificate/BitLocker check labels with question-style names.
+- Removed the `Device Guard Data` informational row from returned check results.
+- Added checks for Secure Boot state, Kernel DMA protection, and App Control for Business kernel/user mode policy states.
+- Updated Kernel DMA protection detection to use DeviceGuardAvailableSecurityProperties from Get-ComputerInfo.
+- Renamed Credential Guard and HVCI checks to running-state question labels.
+- Split Windows Firewall profile status into separate Public/Domain/Internal checks and an active-profile state check.
+- Renamed additional checks to question-style labels for WDAC/LSA/LSASS/WDigest/Cached Logons/Defender/Admin group checks.
+- Added checks and remediations for local Administrators membership controls.
+- Added informational checks for Domain Joined, Entra ID Joined, Intune Managed, and Workgroup.
+- Renamed SMB1, NTLM, Multicast Name Resolution, Active Inbound Firewall Rules, and AppLocker check labels.
+- Renamed WDAC and user mode policy check labels.
+- Renamed application control policy/scope check labels.
+- Renamed WDigest check to disabled-state wording and aligned check logic.
+- Renamed cached logons check to less-or-equal wording and aligned check logic.
+- Expanded `-IssuesOnly` (alias `-ShowIssues`) false-state issue checks.
+- Added check `Windows patched within 45 days?` and included it in `-IssuesOnly` false-state checks.
+- Expanded `-IssuesOnly`/`-ShowIssues` to include SMB1/NTLM/multicast/firewall/AppLocker checks and true-state checks for extra local admin users and active inbound firewall rules.
 
 ## Contents
 
@@ -74,35 +98,91 @@ Evaluates core security controls and returns objects with this shape:
   - Default: `$env:ProgramData\WindowsClientSecurityBaseline`
 - `-AsJsonOnly`
   - Present in parameter block for compatibility.
-- `-FalseOnly`
-  - When specified, only results with a status that is not `True` are returned to the pipeline.
+- `-IssuesOnly`
+  - Returns only rows where one of the configured issue checks has status `False`.
+  - Alias: `-ShowIssues`
+  - Current issue checks:
+    - `Running with Admin Priv?` with status `False`
+    - `Running supported OS?` with status `False`
+    - `Windows patched within 45 days?` with status `False`
+    - `UEFI Mode?` with status `False`
+    - `Secure Boot?` with status `False`
+    - `Secure Boot State?` with status `False`
+    - `Secure Boot Certificate Updated?` with status `False`
+    - `TPM exists?` with status `False`
+    - `BitLocker (OS Drive)?` with status `False`
+    - `VBS enabled?` with status `False`
+    - `Kernel DMA Protection?` with status `False`
+    - `Credential Guard running?` with status `False`
+    - `HVCI (Memory Integrity) running?` with status `False`
+    - `Application control policy present?` with status `False`
+    - `Application control scope: apps and scripts?` with status `False`
+    - `Application control policy enforced?` with status `False`
+    - `LSA Protection enabled?` with status `False`
+    - `LSASS Protected Process enabled?` with status `False`
+    - `WDigest Credential Caching disabled?` with status `False`
+    - `UAC Enabled?` with status `False`
+    - `Cached Logons Count less or equal to 1?` with status `False`
+    - `Defender Real-Time Protection running?` with status `False`
+    - `Defender EDR Service running?` with status `False`
+    - `Defender Antivirus running?` with status `False`
+    - `SMB1 Disabled?` with status `False`
+    - `NTLM LmCompatibilityLevel Hardened?` with status `False`
+    - `NTLM Restrict Sending Traffic ok?` with status `False`
+    - `NTLM Restrict Receiving Traffic ok?` with status `False`
+    - `Is Multicast Name Resolution disabled` with status `False`
+    - `Windows Firewall profile Public enabled?` with status `False`
+    - `Windows Firewall profile Domain Enabled?` with status `False`
+    - `Windows Firewall profile Internal enabled?` with status `False`
+    - `Current Windows Firewall profile active?` with status `False`
+    - `AppLocker being used?` with status `False`
+    - `Current User member of Local Administrators group?` with status `True`
+    - `Extra Local Users in Administrators group?` with status `True`
+    - `Active Inbound Firewall rules in current profile?` with status `True`
 
 ### Checks Implemented
 
-- Administrative Privileges
-- Supported OS
-- UEFI
-- Secure Boot
-- Secure Boot Certificate
-- TPM
-- BitLocker (OS Drive)
-- Device Guard Data
-- VBS
-- Credential Guard
-- HVCI (Memory Integrity)
-- WDAC
-- LSA Protection (RunAsPPL)
-- LSASS Protected Process
-- WDigest Credential Caching
-- Cached Logons Count
-- Defender Real-Time Protection
-- Defender EDR Service
-- SMB1
-- NTLM Hardening
-- Windows Firewall Profiles (active profile(s))
-- Active Inbound Firewall Rules (active profile(s))
-- Multicast Name Resolution
-- AppLocker
+- Running with Admin Priv?
+- Running supported OS?
+- Windows patched within 45 days?
+- UEFI Mode?
+- Secure Boot?
+- Secure Boot State?
+- Secure Boot Certificate Updated?
+- TPM exists?
+- BitLocker (OS Drive)?
+- VBS enabled?
+- Kernel DMA Protection?
+- Application control policy present?
+- Application control scope: apps and scripts?
+- Credential Guard running?
+- HVCI (Memory Integrity) running?
+- Application control policy enforced?
+- LSA Protection enabled?
+- LSASS Protected Process enabled?
+- WDigest Credential Caching disabled?
+- Cached Logons Count less or equal to 1?
+- Defender Real-Time Protection running?
+- Defender EDR Service running?
+- Defender Antivirus running?
+- SMB1 Disabled?
+- NTLM LmCompatibilityLevel Hardened?
+- NTLM Restrict Sending Traffic ok?
+- NTLM Restrict Receiving Traffic ok?
+- UAC Enabled?
+- Current User member of Local Administrators group?
+- Extra Local Users in Administrators group?
+- Windows Firewall profile Public enabled?
+- Windows Firewall profile Domain Enabled?
+- Windows Firewall profile Internal enabled?
+- Current Windows Firewall profile active?
+- Active Inbound Firewall rules in current profile?
+- Is Multicast Name Resolution disabled
+- Domain Joined?
+- Entra ID Joined?
+- Managed by Intune?
+- Workgroup Joined?
+- AppLocker being used?
 - Json File (output artifact path)
 - Text File (output artifact path)
 - Log File (output artifact path)
@@ -169,6 +249,11 @@ Core control switches:
 - `-EnableDefenderEdrService`
 - `-DisableSMB1`
 - `-HardenNTLM`
+- `-EnableUAC`
+- `-EnableSmartScreen`
+- `-EnableDefenderAntivirus`
+- `-RemoveCurrentUserFromLocalAdministrators`
+- `-RemoveExtraLocalUsersFromLocalAdministrators`
 - `-EnableFirewallProfiles`
 - `-SetInboundDefaultBlock`
 - `-DisableAllInboundFirewallRules`
@@ -199,6 +284,9 @@ Common:
 - Set cached logons count to 1
 - Disable SMB1
 - Harden NTLM settings
+- Enable UAC
+- Enable SmartScreen
+- Enable Defender Antivirus
 - Disable Multicast Name Resolution (LLMNR)
 
 ### Baseline-Driven Auto Remediation
@@ -223,20 +311,28 @@ $b = .\Check-WindowsClientSecurityBaseline.ps1
 
 | Baseline Check | Remediation Switch |
 |---|---|
-| VBS | `-EnableVBS` |
-| Credential Guard | `-EnableCredentialGuard` |
-| HVCI (Memory Integrity) | `-EnableHVCI` |
-| LSA Protection (RunAsPPL) | `-EnableLsaProtection` |
-| LSASS Protected Process | `-EnableLsassProtectedProcess` |
-| WDigest Credential Caching | `-DisableWDigestCredentialCaching` |
-| Cached Logons Count | `-SetCachedLogonsCount1` |
-| Defender Real-Time Protection | `-EnableDefenderRealtimeProtection` |
-| Defender EDR Service | `-EnableDefenderEdrService` |
-| SMB1 | `-DisableSMB1` |
-| NTLM Hardening | `-HardenNTLM` |
-| Windows Firewall Profiles | `-EnableFirewallProfiles` |
-| Active Inbound Firewall Rules | `-SetInboundDefaultBlock` |
-| Multicast Name Resolution | `-DisableMulticastNameResolution` |
+| VBS enabled? | `-EnableVBS` |
+| Credential Guard running? | `-EnableCredentialGuard` |
+| HVCI (Memory Integrity) running? | `-EnableHVCI` |
+| LSA Protection enabled? | `-EnableLsaProtection` |
+| LSASS Protected Process enabled? | `-EnableLsassProtectedProcess` |
+| WDigest Credential Caching disabled? | `-DisableWDigestCredentialCaching` |
+| Cached Logons Count less or equal to 1? | `-SetCachedLogonsCount1` |
+| Defender Real-Time Protection running? | `-EnableDefenderRealtimeProtection` |
+| Defender EDR Service running? | `-EnableDefenderEdrService` |
+| Defender Antivirus running? | `-EnableDefenderAntivirus` |
+| SMB1 Disabled? | `-DisableSMB1` |
+| NTLM LmCompatibilityLevel Hardened? | `-HardenNTLM` |
+| NTLM Restrict Sending Traffic ok? | `-HardenNTLM` |
+| NTLM Restrict Receiving Traffic ok? | `-HardenNTLM` |
+| UAC Enabled? | `-EnableUAC` |
+| Current User member of Local Administrators group? | `-RemoveCurrentUserFromLocalAdministrators` |
+| Extra Local Users in Administrators group? | `-RemoveExtraLocalUsersFromLocalAdministrators` |
+| Windows Firewall profile Public enabled? | `-EnableFirewallProfiles` |
+| Windows Firewall profile Domain Enabled? | `-EnableFirewallProfiles` |
+| Windows Firewall profile Internal enabled? | `-EnableFirewallProfiles` |
+| Active Inbound Firewall rules in current profile? | `-SetInboundDefaultBlock` |
+| Is Multicast Name Resolution disabled | `-DisableMulticastNameResolution` |
 
 ## Operational Guidance
 
