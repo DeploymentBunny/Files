@@ -4,9 +4,9 @@ This folder contains a baseline assessment script and a remediation script for W
 
 ## Version
 
-- Toolkit Version: 1.7.26
+- Toolkit Version: 1.7.27
 - Last Updated: 2026-05-07
-- Baseline Script: 1.7.26
+- Baseline Script: 1.7.27
 - Remediation Script: 1.6.8
 
 ## Versioning Policy
@@ -95,7 +95,7 @@ Evaluates core security controls and returns objects with this shape:
 ### Parameters
 
 - `-OutputPath <string>`
-  - Default: `$env:ProgramData\WindowsClientSecurityBaseline`
+  - Default: `$env:TEMP\WindowsClientSecurityBaseline`
 - `-AsJsonOnly`
   - Present in parameter block for compatibility.
 - `-IssuesOnly`

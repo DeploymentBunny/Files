@@ -46,7 +46,7 @@
     .\Check-WindowsClientSecurityBaseline.ps1 -OutputPath C:\Temp\SecurityChecks
 .Notes
     ScriptName: Check-WindowsClientSecurityBaseline.ps1
-    Version:    1.7.26
+    Version:    1.7.27
     Updated:    2026-05-07
     Author:     Mikael Nystrom
     Blog:       https://www.deploymentbunny.com
@@ -60,7 +60,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = "$env:ProgramData\WindowsClientSecurityBaseline",
+    [string]$OutputPath = "$env:TEMP\WindowsClientSecurityBaseline",
 
     [Parameter(Mandatory = $false)]
     [switch]$AsJsonOnly,
