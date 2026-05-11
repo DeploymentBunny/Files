@@ -32,12 +32,18 @@
     Displays detailed object output as a list.
 
 .NOTES
-    Created: 2016-11-07
-    Version: 3.0
-    Author : Mikael Nystrom
-    Twitter: @mikael_nystrom
-    Blog   : https://www.deploymentbunny.com
-    Disclaimer: This script is provided "AS IS" with no warranties.
+    FileName:    Get-TSxActiveDiffDisk.ps1
+    Version:     3.0.0
+    Author:      Mikael Nystrom
+    Twitter:     @mikael_nystrom
+    Contact:     deploymentbunny@outlook.com
+    Created:     2016-11-07
+    Updated:     2026-05-11
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties.
+.LINK
+    https://www.deploymentbunny.com
 #>
 
 [CmdletBinding()]

@@ -24,8 +24,7 @@
     Twitter:     @mikael_nystrom
 
     Disclaimer:
-    This script is provided "AS IS" with no warranties, confers no rights and
-    is not supported by the author.
+    This script is provided "AS IS" with no warranties.
 .FUNCTIONALITY
     The script verifies administrative privileges and self-elevates when required.
     It validates that the Data Deduplication feature and cmdlets are available and

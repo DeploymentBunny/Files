@@ -12,19 +12,22 @@
     - Persists last-used settings in %LOCALAPPDATA%\DeploymentBunny.
     - Writes a per-run log file in %TEMP%.
 
-.NOTES
-    Version:     0.0.0.1
-
-    Author - Mikael Nystrom
-    Twitter: @mikael_nystrom
-
-    Disclaimer:
-    This script is provided "AS IS" with no warranties, confers no rights and
-    is not supported by the author.
-.LINK
-    https://www.deploymentbunny.com
 .EXAMPLE
     .\Get-TSxActiveDiffDiskUI.ps1
+
+.NOTES
+    FileName:    Get-TSxActiveDiffDiskUI.ps1
+    Version:     1.0.0
+    Author:      Mikael Nystrom
+    Twitter:     @mikael_nystrom
+    Contact:     deploymentbunny@outlook.com
+    Created:     2026-05-11
+    Updated:     2026-05-11
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties.
+.LINK
+    https://www.deploymentbunny.com
 #>
 
 # Get the ID and security principal of the current user account
