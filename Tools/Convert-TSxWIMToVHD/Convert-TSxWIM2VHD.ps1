@@ -13,8 +13,7 @@ The script can optionally:
 - Add CAB packages from a folder
 - Copy extra content into the image
 
-The script requires local administrator privileges and the PAWUtility module
-located under Functions\PAWUtility relative to this script.
+The script requires local administrator privileges.
 
 .PARAMETER Sourcefile
 Path to the source WIM file.
@@ -68,11 +67,14 @@ If specified, removes an existing destination virtual disk before creating a new
 .NOTES
     Requires:  Windows PowerShell 5.1 or later.
                Must be run as a local administrator.
-               The PAWUtility module must be present under Functions\PAWUtility
-               relative to this script (loaded automatically via Import-Module).
+               The script includes local fallback helpers for New-PAWVHD and
+               Invoke-PAWExe if the legacy PAWUtility module is not present.
                DISM.exe (or a custom path supplied via -DISMExe) must be available.
                -Features requires -PathtoSXSFolder to be specified and the path must exist.
                -SXSFolderCopy requires -PathtoSXSFolder when the SXS content is needed.
+
+    Version: 1.0.1
+    Date: 2026-05-18
 
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
@@ -156,7 +158,102 @@ if ($PSBoundParameters['Verbose']) {
     $VerbosePreference = "Continue"
 }
 
-Import-Module -Global $PSScriptRoot\Functions\PAWUtility -ErrorAction Stop -Force
+function Write-TSxStatus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host "[Convert-TSxWIM2VHD] $Message" -ForegroundColor Green
+}
+
+$legacyPawModule = Join-Path $PSScriptRoot 'Functions\PAWUtility\PAWUtility.psm1'
+if (Test-Path -Path $legacyPawModule) {
+    Import-Module -Global $legacyPawModule -ErrorAction Stop -Force
+}
+
+if (-not (Get-Command -Name New-PAWVHD -ErrorAction SilentlyContinue)) {
+    function New-PAWVHD {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$VHDFile,
+
+            [Parameter(Mandatory = $true)]
+            [int]$VHDSizeinMB,
+
+            [Parameter(Mandatory = $true)]
+            [ValidateSet('EXPANDABLE', 'FIXED')]
+            [string]$VHDType
+        )
+
+        $sizeBytes = [int64]$VHDSizeinMB * 1MB
+        if ($VHDType -eq 'FIXED') {
+            New-VHD -Path $VHDFile -SizeBytes $sizeBytes -Fixed -ErrorAction Stop | Out-Null
+        }
+        else {
+            New-VHD -Path $VHDFile -SizeBytes $sizeBytes -Dynamic -ErrorAction Stop | Out-Null
+        }
+    }
+}
+
+if (-not (Get-Command -Name Invoke-PAWExe -ErrorAction SilentlyContinue)) {
+    function Invoke-PAWExe {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Executable,
+
+            [Parameter(Mandatory = $false)]
+            [string]$Arguments,
+
+            [Parameter(Mandatory = $false)]
+            [int[]]$SuccessfulReturnCode = @(0)
+        )
+
+        Write-Verbose "Executing: $Executable $Arguments"
+        $stdOutFile = [System.IO.Path]::GetTempFileName()
+        $stdErrFile = [System.IO.Path]::GetTempFileName()
+
+        try {
+            $proc = Start-Process -FilePath $Executable -ArgumentList $Arguments -NoNewWindow -PassThru -Wait -ErrorAction Stop -RedirectStandardOutput $stdOutFile -RedirectStandardError $stdErrFile
+            $stdOut = Get-Content -Path $stdOutFile -Raw -ErrorAction SilentlyContinue
+            $stdErr = Get-Content -Path $stdErrFile -Raw -ErrorAction SilentlyContinue
+
+            if ($VerbosePreference -ne 'SilentlyContinue') {
+                foreach ($line in (($stdOut -split "`r?`n") | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+                    Write-Verbose "[$Executable] $line"
+                }
+                foreach ($line in (($stdErr -split "`r?`n") | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+                    Write-Verbose "[$Executable][stderr] $line"
+                }
+            }
+
+            if ($proc.ExitCode -notin $SuccessfulReturnCode) {
+                $details = @($stdErr, $stdOut) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+                if ($details.Count -gt 0) {
+                    throw "Command failed: $Executable $Arguments (ExitCode=$($proc.ExitCode)). $($details -join ' ')"
+                }
+
+                throw "Command failed: $Executable $Arguments (ExitCode=$($proc.ExitCode))."
+            }
+        }
+        finally {
+            Remove-Item -Path $stdOutFile -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path $stdErrFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+if (-not $isAdmin) {
+    throw 'Administrative privileges are required. Start PowerShell as Administrator and run the script again.'
+}
+
+Write-TSxStatus -Message "Starting conversion. Layout=$Disklayout, Index=$Index, Type=$VHDType"
+Write-TSxStatus -Message "Source: $Sourcefile"
+Write-TSxStatus -Message "Destination: $DestinationFile"
 
 if ($PSBoundParameters.ContainsKey('Features')) {
     if (-not $PSBoundParameters.ContainsKey('PathtoSXSFolder') -or [string]::IsNullOrWhiteSpace($PathtoSXSFolder)) {
@@ -183,6 +280,8 @@ if ((Test-Path -Path $DestinationFile) -eq $True -and ($RemoveOldVHD -eq $True))
     Write-Warning "$DestinationFile exists and -RemoveOldVHD is set to $RemoveOldVHD, trying to remove"
     Remove-Item -Path $DestinationFile -Force -ErrorAction Stop
 }
+
+Write-TSxStatus -Message 'Creating and preparing virtual disk'
 
 #Apply WIM to VHD(x)
 Switch ($Disklayout) {
@@ -277,6 +376,7 @@ Switch ($Disklayout) {
 }
 
 #Apply BCD to VHD(x)
+Write-TSxStatus -Message 'Applying boot configuration'
 Switch ($Disklayout) {
     BIOS {
         Switch ($OSVersion) {
@@ -321,14 +421,15 @@ Switch ($Disklayout) {
         $Null = Invoke-PAWExe -Executable $Exe -Arguments $Arguments
 
         # Change ID on FAT32 Partition, since we cannot assign the correct ID at creationtime depending on a "feature" in Windows
-        $DiskPartTextFile = New-Item "diskpart.txt" -type File -Force
+        $DiskPartTextFile = Join-Path $env:TEMP ("diskpart-{0}.txt" -f [guid]::NewGuid().ToString('N'))
         $Null = Set-Content $DiskPartTextFile "select disk $VHDDiskNumber"
-        $Null = Add-Content $DiskPartTextFile "Select Partition 2" -Verbose
+        $Null = Add-Content $DiskPartTextFile "Select Partition 2"
         $Null = Add-Content $DiskPartTextFile "Set ID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b OVERRIDE"
         $Null = Add-Content $DiskPartTextFile "GPT Attributes=0x8000000000000000"
         $Exe = "diskpart.exe"
         $Arguments = "/s $DiskPartTextFile"
         $Null = Invoke-PAWExe -Executable $Exe -Arguments $Arguments
+        Remove-Item -Path $DiskPartTextFile -Force -ErrorAction SilentlyContinue
     }
     COMBO {
         # Apply BootFiles
@@ -353,6 +454,7 @@ Switch ($Disklayout) {
 }
 
 #Copy SXS Folders to VHD(X)
+Write-TSxStatus -Message 'Applying optional customizations'
 If ($SXSFolderCopy) {
     If ($PathtoSXSFolder -like '') {
         Write-Verbose "No SXS folder specified"
@@ -408,5 +510,7 @@ else {
 }
 
 # Dismount VHDX
+Write-TSxStatus -Message 'Finalizing and dismounting virtual disk'
 $Null = Dismount-DiskImage -ImagePath $VHDFile
+Write-TSxStatus -Message "Completed successfully. Output: $VHDFile"
 Return $VHDFile
