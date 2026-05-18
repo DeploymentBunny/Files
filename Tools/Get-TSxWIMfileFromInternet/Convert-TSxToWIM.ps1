@@ -33,7 +33,7 @@ $download | .\Convert-TSxToWIM.ps1 -Verbose
 .\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
 
 .NOTES
-Version: 1.0.6
+Version: 1.0.10
 Date: 2026-05-18
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -139,11 +139,72 @@ function Test-HealthyMountedImages {
 	[CmdletBinding()]
 	param()
 
-	$mountedImages = @()
-	try {
-		$mountedImages = @(Get-WindowsImage -Mounted -ErrorAction Stop)
-	} catch {
-		throw "Unable to query mounted Windows images before conversion. $($_.Exception.Message)"
+	$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+	$startInfo.FileName = 'dism.exe'
+	$startInfo.Arguments = '/English /Get-MountedWimInfo'
+	$startInfo.UseShellExecute = $false
+	$startInfo.RedirectStandardOutput = $true
+	$startInfo.RedirectStandardError = $true
+	$startInfo.CreateNoWindow = $true
+
+	$process = New-Object System.Diagnostics.Process
+	$process.StartInfo = $startInfo
+	if (-not $process.Start()) {
+		throw 'Unable to start DISM while checking mounted Windows images.'
+	}
+
+	if (-not $process.WaitForExit(15000)) {
+		try {
+			$process.Kill()
+		} catch {
+		}
+
+		throw 'Timed out while checking mounted Windows images. DISM may be blocked by a stale mount state.'
+	}
+
+	$standardOutput = $process.StandardOutput.ReadToEnd()
+	$standardError = $process.StandardError.ReadToEnd()
+	if ($process.ExitCode -ne 0) {
+		$failureText = ($standardError, $standardOutput | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+		throw "Unable to query mounted Windows images before conversion. $failureText"
+	}
+
+	if ($standardOutput -match 'No mounted images found\.') {
+		return
+	}
+
+	$mountedImages = New-Object System.Collections.Generic.List[object]
+	$currentImage = $null
+	foreach ($line in ($standardOutput -split "`r?`n")) {
+		if ($line -match '^Mount Dir\s*:\s*(.+)$') {
+			if ($null -ne $currentImage) {
+				$mountedImages.Add($currentImage)
+			}
+
+			$currentImage = [PSCustomObject]@{
+				ImagePath   = $null
+				Path        = $Matches[1].Trim()
+				MountStatus = ''
+			}
+			continue
+		}
+
+		if ($null -eq $currentImage) {
+			continue
+		}
+
+		if ($line -match '^Image File\s*:\s*(.+)$') {
+			$currentImage.ImagePath = $Matches[1].Trim()
+			continue
+		}
+
+		if ($line -match '^Mount Status\s*:\s*(.+)$') {
+			$currentImage.MountStatus = $Matches[1].Trim()
+		}
+	}
+
+	if ($null -ne $currentImage) {
+		$mountedImages.Add($currentImage)
 	}
 
 	if ($mountedImages.Count -eq 0) {
@@ -216,9 +277,15 @@ function Convert-EsdPathToWim {
 	Write-ConversionStatus 'Administrator check passed.'
 	Write-ConversionStatus 'Checking mounted image health...'
 	$mountedCheckStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-	Test-HealthyMountedImages
-	$mountedCheckStopwatch.Stop()
-	Write-ConversionStatus "Mounted image health check passed in $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
+	try {
+		Test-HealthyMountedImages
+		$mountedCheckStopwatch.Stop()
+		Write-ConversionStatus "Mounted image health check passed in $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
+	} catch {
+		$mountedCheckStopwatch.Stop()
+		Write-TSxLog -Level 'WARN' -Message "Mounted image health check could not be completed: $($_.Exception.Message)"
+		Write-ConversionStatus "Mounted image health check could not be completed after $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s). Continuing anyway."
+	}
 
 	$wimDirectory = Split-Path -Path $WimPath -Parent
 	if (-not (Test-Path -Path $wimDirectory)) {
@@ -253,7 +320,7 @@ function Convert-EsdPathToWim {
 		$requestedIndexes = @($Index | Select-Object -Unique)
 		$missingIndexes = @($requestedIndexes | Where-Object { $_ -notin $availableIndexes })
 		if ($missingIndexes.Count -gt 0) {
-			throw "Requested image index(es) were not found in $EsdPath: $($missingIndexes -join ', ')"
+			throw "Requested image index(es) were not found in ${EsdPath}: $($missingIndexes -join ', ')"
 		}
 
 		$imagesToExport = @($images | Where-Object { [int]$_.ImageIndex -in $requestedIndexes })
@@ -266,21 +333,21 @@ function Convert-EsdPathToWim {
 	$currentImage = 0
 	foreach ($image in $imagesToExport) {
 		$currentImage++
-		$index = [int]$image.ImageIndex
-		$imageLabel = if ([string]::IsNullOrWhiteSpace([string]$image.ImageName)) { "Index $index" } else { "Index $index - $($image.ImageName)" }
+		$imageIndex = [uint32]$image.ImageIndex
+		$imageLabel = if ([string]::IsNullOrWhiteSpace([string]$image.ImageName)) { "Index $imageIndex" } else { "Index $imageIndex - $($image.ImageName)" }
 		Write-ConversionStatus "Exporting $imageLabel ($currentImage/$totalImages)..."
 		$percentComplete = [int](($currentImage / $totalImages) * 100)
 		Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Exporting $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
 		Write-Verbose "Converting $imageLabel to $WimPath ($currentImage of $totalImages)"
 
-		$action = "Export index $index from $EsdPath"
+		$action = "Export index $imageIndex from $EsdPath"
 		if ($PSCmdlet.ShouldProcess($WimPath, $action)) {
 			try {
-				Export-WindowsImage -SourceImagePath $EsdPath -SourceIndex $index -DestinationImagePath $WimPath -CompressionType Max -CheckIntegrity -ErrorAction Stop | Out-Null
+				Export-WindowsImage -SourceImagePath $EsdPath -SourceIndex $imageIndex -DestinationImagePath $WimPath -CompressionType Max -CheckIntegrity -ErrorAction Stop | Out-Null
 			} catch {
 				Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Completed
-				Write-TSxLog -Level 'ERROR' -Message "Export-WindowsImage failed for index $index. $($_.Exception.Message)"
-				throw "Export-WindowsImage failed while exporting index $index from $EsdPath. $($_.Exception.Message)"
+				Write-TSxLog -Level 'ERROR' -Message "Export-WindowsImage failed for index $imageIndex. $($_.Exception.Message)"
+				throw "Export-WindowsImage failed while exporting index $imageIndex from $EsdPath. $($_.Exception.Message)"
 			}
 		}
 	}

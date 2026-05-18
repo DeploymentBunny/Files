@@ -19,7 +19,7 @@ Path to the source ESD file.
 $download | .\Get-TSxESDInfo.ps1
 
 .NOTES
-Version: 1.0.1
+Version: 1.0.7
 Date: 2026-05-18
 #>
 [CmdletBinding()]
@@ -104,6 +104,24 @@ function Resolve-EsdSourcePath {
 	throw 'Unable to resolve ESD path from pipeline input. Use -EsdPath or pipe an object with EsdPath, FilePath, or FullName.'
 }
 
+function Get-OptionalPropertyValue {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[object]$InputObject,
+
+		[Parameter(Mandatory = $true)]
+		[string]$PropertyName
+	)
+
+	$property = $InputObject.PSObject.Properties[$PropertyName]
+	if ($null -eq $property) {
+		return $null
+	}
+
+	return $property.Value
+}
+
 function Get-EsdImageInfo {
 	[CmdletBinding()]
 	param(
@@ -119,6 +137,120 @@ function Get-EsdImageInfo {
 		return @(Get-WindowsImage -ImagePath $EsdPath -ErrorAction Stop)
 	} catch {
 		throw "Get-WindowsImage failed while reading ESD metadata from $EsdPath. $($_.Exception.Message)"
+	}
+}
+
+function Test-HealthyMountedImages {
+	[CmdletBinding()]
+	param()
+
+	$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+	$startInfo.FileName = 'dism.exe'
+	$startInfo.Arguments = '/English /Get-MountedWimInfo'
+	$startInfo.UseShellExecute = $false
+	$startInfo.RedirectStandardOutput = $true
+	$startInfo.RedirectStandardError = $true
+	$startInfo.CreateNoWindow = $true
+
+	$process = New-Object System.Diagnostics.Process
+	$process.StartInfo = $startInfo
+	if (-not $process.Start()) {
+		throw 'Unable to start DISM while checking mounted Windows images.'
+	}
+
+	if (-not $process.WaitForExit(15000)) {
+		try {
+			$process.Kill()
+		} catch {
+		}
+
+		throw 'Timed out while checking mounted Windows images. DISM may be blocked by a stale mount state.'
+	}
+
+	$standardOutput = $process.StandardOutput.ReadToEnd()
+	$standardError = $process.StandardError.ReadToEnd()
+	if ($process.ExitCode -ne 0) {
+		$failureText = ($standardError, $standardOutput | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+		throw "Unable to query mounted Windows images before reading ESD metadata. $failureText"
+	}
+
+	if ($standardOutput -match 'No mounted images found\.') {
+		return
+	}
+
+	$mountedImages = New-Object System.Collections.Generic.List[object]
+	$currentImage = $null
+	foreach ($line in ($standardOutput -split "`r?`n")) {
+		if ($line -match '^Mount Dir\s*:\s*(.+)$') {
+			if ($null -ne $currentImage) {
+				$mountedImages.Add($currentImage)
+			}
+
+			$currentImage = [PSCustomObject]@{
+				ImagePath   = $null
+				Path        = $Matches[1].Trim()
+				MountStatus = ''
+			}
+			continue
+		}
+
+		if ($null -eq $currentImage) {
+			continue
+		}
+
+		if ($line -match '^Image File\s*:\s*(.+)$') {
+			$currentImage.ImagePath = $Matches[1].Trim()
+			continue
+		}
+
+		if ($line -match '^Mount Status\s*:\s*(.+)$') {
+			$currentImage.MountStatus = $Matches[1].Trim()
+		}
+	}
+
+	if ($null -ne $currentImage) {
+		$mountedImages.Add($currentImage)
+	}
+
+	if ($mountedImages.Count -eq 0) {
+		return
+	}
+
+	$potentiallyBroken = New-Object System.Collections.Generic.List[object]
+	foreach ($mountedImage in $mountedImages) {
+		$mountStatus = ''
+		if ($mountedImage.PSObject.Properties['MountStatus']) {
+			$mountStatus = [string]$mountedImage.MountStatus
+		} elseif ($mountedImage.PSObject.Properties['Status']) {
+			$mountStatus = [string]$mountedImage.Status
+		}
+
+		$path = $null
+		if ($mountedImage.PSObject.Properties['Path']) {
+			$path = [string]$mountedImage.Path
+		}
+
+		$pathMissing = $false
+		if (-not [string]::IsNullOrWhiteSpace($path)) {
+			$pathMissing = -not (Test-Path -Path $path)
+		}
+
+		$statusLooksBad = -not [string]::IsNullOrWhiteSpace($mountStatus) -and ($mountStatus -notmatch '^(Ok|Mounted)$')
+		if ($statusLooksBad -or $pathMissing) {
+			$potentiallyBroken.Add([PSCustomObject]@{
+				ImagePath   = [string]$mountedImage.ImagePath
+				Path        = $path
+				MountStatus = $mountStatus
+			})
+		}
+	}
+
+	if ($potentiallyBroken.Count -gt 0) {
+		$brokenSummary = $potentiallyBroken | ForEach-Object {
+			"ImagePath='$($_.ImagePath)', Path='$($_.Path)', MountStatus='$($_.MountStatus)'"
+		}
+
+		throw "Broken or stale mounted image(s) were detected before reading ESD metadata: $($brokenSummary -join '; '). Clean up mounted images and retry."
 	}
 }
 
@@ -146,6 +278,17 @@ try {
 		}
 
 		Write-InfoStatus 'Administrator check passed.'
+		Write-InfoStatus 'Checking mounted image health...'
+		$mountedCheckStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+		try {
+			Test-HealthyMountedImages
+			$mountedCheckStopwatch.Stop()
+			Write-InfoStatus "Mounted image health check passed in $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
+		} catch {
+			$mountedCheckStopwatch.Stop()
+			Write-TSxLog -Level 'WARN' -Message "Mounted image health check could not be completed: $($_.Exception.Message)"
+			Write-InfoStatus "Mounted image health check could not be completed after $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s). Continuing anyway."
+		}
 		Write-InfoStatus 'Reading ESD image metadata...'
 		$metadataStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
@@ -157,16 +300,9 @@ try {
 		foreach ($image in $images | Sort-Object ImageIndex) {
 			[PSCustomObject]@{
 				EsdPath      = $resolvedEsdPath
-				ImageIndex   = [int]$image.ImageIndex
-				ImageName    = [string]$image.ImageName
-				ImageDescription = [string]$image.ImageDescription
-				Architecture = [string]$image.Architecture
-				EditionId    = [string]$image.EditionId
-				Version      = [string]$image.Version
-				Build        = [string]$image.Build
-				CreatedTime  = $image.CreatedTime
-				ModifiedTime = $image.ModifiedTime
-				Languages    = if ($image.Languages) { ($image.Languages -join ',') } else { $null }
+				ImageIndex   = [int](Get-OptionalPropertyValue -InputObject $image -PropertyName 'ImageIndex')
+				ImageName    = [string](Get-OptionalPropertyValue -InputObject $image -PropertyName 'ImageName')
+				ImageDescription = [string](Get-OptionalPropertyValue -InputObject $image -PropertyName 'ImageDescription')
 			}
 		}
 	}
