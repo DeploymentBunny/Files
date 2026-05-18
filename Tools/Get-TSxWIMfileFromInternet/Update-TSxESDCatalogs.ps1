@@ -1,9 +1,49 @@
+<#
+.SYNOPSIS
+Downloads and refreshes local Microsoft ESD catalog XML files.
+
+.DESCRIPTION
+Retrieves known Microsoft catalog CAB sources, extracts XML catalog files,
+and stores normalized catalog XML files in the target Catalogs folder.
+
+.PARAMETER CatalogPath
+Optional destination path for refreshed catalog XML files.
+
+.EXAMPLE
+.\Update-TSxESDCatalogs.ps1
+
+.NOTES
+Version: 1.1.0
+Date: 2026-05-18
+#>
 param(
 	[string]$CatalogPath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$Script:LogRootPath = Join-Path $env:TEMP 'TSxWimFileFromInternet'
+$Script:LogFilePath = Join-Path $Script:LogRootPath ("{0}.log" -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
+
+function Write-TSxLog {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$Message,
+
+		[ValidateSet('INFO', 'WARN', 'ERROR')]
+		[string]$Level = 'INFO'
+	)
+
+	$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+	Add-Content -Path $Script:LogFilePath -Value "$timestamp [$Level] $Message"
+}
+
+if (-not (Test-Path -Path $Script:LogRootPath)) {
+	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
+}
+Write-TSxLog -Message "Script start. CatalogPath=$CatalogPath"
 
 $Script:DefaultCatalogPath = Join-Path $PSScriptRoot 'Catalogs'
 
@@ -41,6 +81,7 @@ function Get-Microsoft25H2CatalogUrl {
 
 	foreach ($targetVersion in $targetVersions) {
 		$body = @{ Products = "PN=Windows.Products.Cab.amd64&V=$targetVersion"; DeviceAttributes = $deviceAttributes } | ConvertTo-Json -Compress
+		Write-TSxLog -Message "Trying 25H2 catalog lookup for target version: $targetVersion"
 
 		try {
 			$response = Invoke-RestMethod -Uri $uri -Method Post -Body $body -Headers @{ 'Content-Type' = 'application/json'; Accept = '*/*'; 'User-Agent' = $ua } -TimeoutSec 60
@@ -56,6 +97,7 @@ function Get-Microsoft25H2CatalogUrl {
 				return $response.Updates[0].FileLocations[0].Url
 			}
 		} catch {
+			Write-TSxLog -Level 'WARN' -Message "25H2 lookup attempt failed for $targetVersion: $($_.Exception.Message)"
 			continue
 		}
 	}
@@ -70,6 +112,7 @@ function Update-MicrosoftCatalogFiles {
 	)
 
 	$targetPath = if ($CatalogPath) { $CatalogPath } else { $Script:DefaultCatalogPath }
+	Write-TSxLog -Message "Using catalog target path: $targetPath"
 	if (-not (Test-Path -Path $targetPath)) {
 		New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
 	}
@@ -89,6 +132,7 @@ function Update-MicrosoftCatalogFiles {
 
 	$results = New-Object System.Collections.Generic.List[object]
 	foreach ($source in $catalogSources) {
+		Write-TSxLog -Message "Updating catalog source $($source.Name) from $($source.Url)"
 		$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
 		New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 
@@ -103,6 +147,7 @@ function Update-MicrosoftCatalogFiles {
 			}
 
 			Copy-Item -Path $xmlFile.FullName -Destination (Join-Path $targetPath $source.Name) -Force
+			Write-TSxLog -Message "Updated catalog file: $($source.Name)"
 			$results.Add([PSCustomObject]@{ Name = $source.Name; Source = $source.Url; Path = (Join-Path $targetPath $source.Name) })
 		} finally {
 			Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -113,9 +158,14 @@ function Update-MicrosoftCatalogFiles {
 }
 
 try {
-	Update-MicrosoftCatalogFiles -CatalogPath $CatalogPath | Format-Table -AutoSize
+	$result = Update-MicrosoftCatalogFiles -CatalogPath $CatalogPath
+	Write-TSxLog -Message "Catalog update completed. Updated $($result.Count) file(s)."
+	$result | Format-Table -AutoSize
 	exit 0
 } catch {
+	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)"
 	Write-Error $_
 	exit 1
+} finally {
+	Write-TSxLog -Message 'Script end.'
 }
