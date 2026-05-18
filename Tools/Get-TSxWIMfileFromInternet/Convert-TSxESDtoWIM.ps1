@@ -24,16 +24,16 @@ Optional image index list to export from the ESD (for example 1,2,3).
 If omitted, all image indexes are exported.
 
 .EXAMPLE
-.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd"
+.\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd"
 
 .EXAMPLE
-$download | .\Convert-TSxToWIM.ps1 -Verbose
+$download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 
 .EXAMPLE
-.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
+.\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
 
 .NOTES
-Version: 1.0.10
+Version: 1.0.11
 Date: 2026-05-18
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -79,7 +79,7 @@ function Write-ConversionStatus {
 		[string]$Message
 	)
 
-	Write-Host "[Convert-TSxToWIM] $Message"
+	Write-Host "[Convert-TSxESDtoWIM] $Message"
 	Write-TSxLog -Message $Message
 }
 

@@ -36,6 +36,10 @@
     $info = .\Get-TSxWIMInfo.ps1 -WIMFile D:\Sources\install.wim -Index 1
     $info.EnabledFeatures
 
+.NOTES
+    Version: 1.0.1
+    Date: 2026-05-18
+
 .LINK
     https://www.deploymentbunny.com
 #>
@@ -73,7 +77,11 @@ else {
 
 # Logging
 $Script:ToolName = "Get-TSxWIMInfo"
-$Script:TSxLogFile = Join-Path $env:TEMP ("{0}_{1}.log" -f $Script:ToolName, (Get-Date -Format "yyyyMMdd_HHmmss"))
+$Script:LogFolder = Join-Path $env:TEMP 'Convert-TSxWIMToVHD'
+if (-not (Test-Path -LiteralPath $Script:LogFolder)) {
+    New-Item -ItemType Directory -Path $Script:LogFolder -Force | Out-Null
+}
+$Script:TSxLogFile = Join-Path $Script:LogFolder "$Script:ToolName.log"
 $Script:RunUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
 function Write-TSxLog {
@@ -124,7 +132,7 @@ if ($Index -eq 0) {
     Write-Verbose -Message "No index specified - listing available images in WIM"
     Write-TSxLog -Message "No index specified - listing WIM contents only"
     try {
-        $allImages = Get-WindowsImage -ImagePath $WIMFile -LogPath $LogFile -ErrorAction Stop
+        $allImages = Get-WindowsImage -ImagePath $WIMFile -LogPath $Script:TSxLogFile -ErrorAction Stop
         foreach ($img in $allImages) {
             [PSCustomObject]@{
                 WIMFile    = $WIMFile
@@ -148,7 +156,7 @@ Write-Verbose -Message ("Mounting WIM index {0} to {1}" -f $Index, $MountFolder)
 Write-TSxLog -Message ("Mounting WIM index {0} to {1}" -f $Index, $MountFolder)
 
 try {
-    $null = Mount-WindowsImage -ImagePath $WIMFile -Path $MountFolder -Index $Index -ReadOnly -ErrorAction Stop
+    $null = Mount-WindowsImage -ImagePath $WIMFile -Path $MountFolder -Index $Index -ReadOnly -LogPath $Script:TSxLogFile -ErrorAction Stop
     Write-Verbose -Message "Mount succeeded"
     Write-TSxLog -Message "Mount succeeded"
 }
@@ -160,19 +168,19 @@ catch {
 
 # Collect data
 Write-Verbose -Message "Collecting image metadata"
-try { $WindowsImage = Get-WindowsImage -ImagePath $WIMFile -Index $Index -ErrorAction Stop }
+try { $WindowsImage = Get-WindowsImage -ImagePath $WIMFile -Index $Index -LogPath $Script:TSxLogFile -ErrorAction Stop }
 catch { Write-Warning ("Could not execute Get-WindowsImage. Error: {0}" -f $_.Exception.Message); Write-TSxLog -Message ("Get-WindowsImage failed: {0}" -f $_.Exception.Message) }
 
 Write-Verbose -Message "Collecting driver list"
-try { $WindowsDrivers = Get-WindowsDriver -Path $MountFolder -ErrorAction Stop }
+try { $WindowsDrivers = Get-WindowsDriver -Path $MountFolder -LogPath $Script:TSxLogFile -ErrorAction Stop }
 catch { Write-Warning ("Could not execute Get-WindowsDriver. Error: {0}" -f $_.Exception.Message); Write-TSxLog -Message ("Get-WindowsDriver failed: {0}" -f $_.Exception.Message) }
 
 Write-Verbose -Message "Collecting optional features"
-try { $WindowsOptionalFeatures = Get-WindowsOptionalFeature -Path $MountFolder -ErrorAction Stop }
+try { $WindowsOptionalFeatures = Get-WindowsOptionalFeature -Path $MountFolder -LogPath $Script:TSxLogFile -ErrorAction Stop }
 catch { Write-Warning ("Could not execute Get-WindowsOptionalFeature. Error: {0}" -f $_.Exception.Message); Write-TSxLog -Message ("Get-WindowsOptionalFeature failed: {0}" -f $_.Exception.Message) }
 
 Write-Verbose -Message "Collecting packages"
-try { $WindowsPackages = Get-WindowsPackage -Path $MountFolder -ErrorAction Stop }
+try { $WindowsPackages = Get-WindowsPackage -Path $MountFolder -LogPath $Script:TSxLogFile -ErrorAction Stop }
 catch { Write-Warning ("Could not execute Get-WindowsPackage. Error: {0}" -f $_.Exception.Message); Write-TSxLog -Message ("Get-WindowsPackage failed: {0}" -f $_.Exception.Message) }
 
 Write-Verbose -Message "Collecting AppX provisioned packages"
@@ -242,7 +250,7 @@ Write-Verbose -Message ("Dismounting {0}" -f $MountFolder)
 Write-TSxLog -Message ("Dismounting {0}" -f $MountFolder)
 
 try {
-    Dismount-WindowsImage -Path $MountFolder -Discard -ErrorAction Stop
+    Dismount-WindowsImage -Path $MountFolder -Discard -LogPath $Script:TSxLogFile -ErrorAction Stop
     Write-Verbose -Message "Dismount succeeded"
     Write-TSxLog -Message "Dismount succeeded"
 }

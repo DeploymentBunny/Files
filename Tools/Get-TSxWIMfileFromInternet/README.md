@@ -27,7 +27,7 @@ Optional (only needed for ESD to WIM conversion):
 - Show-TSxESDFiles.ps1: Lists available ESD files
 - Get-TSxESDInfo.ps1: Shows which image indexes exist inside an ESD file
 - Get-TSxESDDownloader.ps1: Downloads selected ESD and can optionally start conversion
-- Convert-TSxToWIM.ps1: Converts an existing ESD file to WIM
+- Convert-TSxESDtoWIM.ps1: Converts an existing ESD file to WIM
 - Update-TSxESDCatalogs.ps1: Updates local catalog XML files used by the list command
 
 ## First-time setup
@@ -152,20 +152,20 @@ The script now shows a progress bar during conversion. Add -Verbose if you also 
 Convert a file later from its ESD path:
 
 ~~~powershell
-.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim"
+.\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim"
 ~~~
 
 Convert only selected image indexes:
 
 ~~~powershell
-.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
+.\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
 ~~~
 
 Convert directly from downloaded output:
 
 ~~~powershell
 $download = $choice | .\Get-TSxESDDownloader.ps1 -OutputPath "C:\Temp\ESD"
-$download | .\Convert-TSxToWIM.ps1 -Verbose
+$download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 ~~~
 
 If you still want a single step, the downloader can start the converter for you:
@@ -207,7 +207,7 @@ Log files are saved here for all scripts:
 
 - %Temp%\TSxWimFileFromInternet
 
-Each script writes to its own log file (for example, Get-TSxESDDownloader.log and Convert-TSxToWIM.log).
+Each script writes to its own log file (for example, Get-TSxESDDownloader.log and Convert-TSxESDtoWIM.log).
 
 ## Safety tips
 
@@ -274,7 +274,7 @@ Inspect indexes and then convert only one image:
 ~~~powershell
 $info = .\Get-TSxESDInfo.ps1 -EsdPath "C:\Temp\ESD\install.esd"
 $info | Format-Table ImageIndex, ImageName, ImageDescription -AutoSize
-.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -Index 1
+.\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -Index 1
 ~~~
 
 ## Version

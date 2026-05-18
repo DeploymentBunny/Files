@@ -73,7 +73,7 @@ If specified, removes an existing destination virtual disk before creating a new
                -Features requires -PathtoSXSFolder to be specified and the path must exist.
                -SXSFolderCopy requires -PathtoSXSFolder when the SXS content is needed.
 
-    Version: 1.0.1
+    Version: 1.0.2
     Date: 2026-05-18
 
     Author - Mikael Nystrom
@@ -246,6 +246,24 @@ if (-not (Get-Command -Name Invoke-PAWExe -ErrorAction SilentlyContinue)) {
     }
 }
 
+# Logging
+$Script:ToolName = 'Convert-TSxWIM2VHD'
+$Script:LogFolder = Join-Path $env:TEMP 'Convert-TSxWIMToVHD'
+if (-not (Test-Path -LiteralPath $Script:LogFolder)) {
+    New-Item -ItemType Directory -Path $Script:LogFolder -Force | Out-Null
+}
+$Script:TSxLogFile = Join-Path $Script:LogFolder "$Script:ToolName.log"
+$Script:RunUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+
+function Write-TSxLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $Script:TSxLogFile -Value ("[{0}] [User: {1}] {2}" -f $timestamp, $Script:RunUser, $Message)
+}
+
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 if (-not $isAdmin) {
     throw 'Administrative privileges are required. Start PowerShell as Administrator and run the script again.'
@@ -310,7 +328,7 @@ Switch ($Disklayout) {
         $Exe = $DISMExe
         $Arguments = " /apply-Image /ImageFile:""$SourceFile"" /index:$Index /ApplyDir:$VHDVolume\"
         # Invoke-PAWExe -Executable $Exe -Arguments $Arguments -SuccessfulReturnCode 0
-        $Null = Expand-WindowsImage -ImagePath $SourceFile -ApplyPath $VHDVolume -Index $Index
+        $Null = Expand-WindowsImage -ImagePath $SourceFile -ApplyPath $VHDVolume -Index $Index -LogPath $Script:TSxLogFile
     }
     UEFI {
         $VHDFile = $DestinationFile
@@ -341,7 +359,7 @@ Switch ($Disklayout) {
         $Exe = $DISMExe
         $Arguments = " /apply-Image /ImageFile:""$SourceFile"" /index:$Index /ApplyDir:$VHDVolume\"
         #Invoke-PAWExe -Executable $Exe -Arguments $Arguments -SuccessfulReturnCode 0
-        $Null = Expand-WindowsImage -ImagePath $SourceFile -ApplyPath $VHDVolume -Index $Index
+        $Null = Expand-WindowsImage -ImagePath $SourceFile -ApplyPath $VHDVolume -Index $Index -LogPath $Script:TSxLogFile
     }
     COMBO {
         $VHDFile = $DestinationFile
@@ -371,7 +389,7 @@ Switch ($Disklayout) {
         $Exe = $DISMExe
         $Arguments = " /apply-Image /ImageFile:""$SourceFile"" /index:$Index /ApplyDir:$VHDVolume\"
         # Invoke-PAWExe -Executable $Exe -Arguments $Arguments -SuccessfulReturnCode 0
-        $Null = Expand-WindowsImage -ImagePath $SourceFile -ApplyPath $VHDVolume -Index $Index
+        $Null = Expand-WindowsImage -ImagePath $SourceFile -ApplyPath $VHDVolume -Index $Index -LogPath $Script:TSxLogFile
     }
 }
 
@@ -487,7 +505,7 @@ If ($Features) {
     Foreach ($Feature in $Features) {
         # $Null = Enable-WindowsOptionalFeature -FeatureName $Feature -Source $PathtoSXSFolder -Path $VHDVolume -All -LimitAccess
         $Exe = $DISMExe
-        $Arguments = "/Image:$VHDVolume /Enable-Feature /FeatureName:$Feature /All /Source:$PathtoSXSFolder /LimitAccess"
+        $Arguments = "/Image:$VHDVolume /Enable-Feature /FeatureName:$Feature /All /Source:$PathtoSXSFolder /LimitAccess /LogPath:`"$Script:TSxLogFile`""
         $Null = Invoke-PAWExe -Executable $Exe -Arguments $Arguments
     }
 }
@@ -501,7 +519,7 @@ else {
         Write-Verbose "Searching for packages"
         $Packges = Get-Childitem -Path $PathtoPackagesFolder -Filter *.cab
         foreach ($Packge in $Packges) {
-            $Null = Add-WindowsPackage -Path $VHDVolume -PackagePath $Packge.Fullname
+            $Null = Add-WindowsPackage -Path $VHDVolume -PackagePath $Packge.Fullname -LogPath $Script:TSxLogFile
         }
     }
     else {

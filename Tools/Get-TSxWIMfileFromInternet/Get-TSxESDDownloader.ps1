@@ -5,7 +5,7 @@ Downloads an ESD from a URL or catalog item and can optionally call the WIM conv
 .DESCRIPTION
 Resolves an ESD download source from direct parameters or a piped catalog object,
 downloads the ESD to a target folder, and can hand off conversion to
-Convert-TSxToWIM.ps1 when WIM output is requested.
+Convert-TSxESDtoWIM.ps1 when WIM output is requested.
 
 .PARAMETER CatalogItem
 Optional input object that can provide FilePath and FileName properties.
@@ -20,7 +20,7 @@ Optional target file name for the downloaded ESD.
 Folder where the ESD file will be stored.
 
 .PARAMETER ConvertToWim
-When set, calls Convert-TSxToWIM.ps1 to convert the downloaded ESD to WIM.
+When set, calls Convert-TSxESDtoWIM.ps1 to convert the downloaded ESD to WIM.
 
 .PARAMETER WimPath
 Optional destination path for the WIM file.
@@ -36,7 +36,7 @@ Overwrites existing ESD or WIM files.
 .\Get-TSxESDDownloader.ps1 -Url "https://example.com/install.esd" -ConvertToWim
 
 .NOTES
-Version: 1.1.1
+Version: 1.1.2
 Date: 2026-05-18
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -248,7 +248,7 @@ try {
 		$downloadedPath = Save-EsdFile -Url $source.Url -DestinationPath $esdPath -Force:$Force -WhatIf:$WhatIfPreference
 
 		if ($ConvertToWim) {
-			$converterScript = Join-Path $PSScriptRoot 'Convert-TSxToWIM.ps1'
+			$converterScript = Join-Path $PSScriptRoot 'Convert-TSxESDtoWIM.ps1'
 			if (-not (Test-Path -Path $converterScript)) {
 				Write-TSxLog -Level 'ERROR' -Message "Required converter script not found: $converterScript"
 				throw "Required converter script not found: $converterScript"

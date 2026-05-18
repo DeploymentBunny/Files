@@ -11,7 +11,7 @@
     - Writes a per-run log file in %TEMP%.
 
 .NOTES
-    Version:     0.0.0.1
+    Version:     0.0.0.3
 
     Author - Mikael Nystrom
     Twitter: @mikael_nystrom
@@ -52,11 +52,15 @@ Add-Type -AssemblyName System.Drawing
 $Script:ToolName = "Convert-TSxWIM2VHDUI"
 $Script:TargetScriptPath = Join-Path $PSScriptRoot "Convert-TSxWIM2VHD.ps1"
 $Script:IndexInfoScriptPath = Join-Path $PSScriptRoot "Get-TSxWimIndexInfo.ps1"
-$Script:LogFile = Join-Path $env:TEMP ("{0}_{1}.log" -f $Script:ToolName, (Get-Date -Format "yyyyMMdd_HHmmss"))
+$Script:LogFolder = Join-Path $env:TEMP 'Convert-TSxWIMToVHD'
+if (-not (Test-Path -LiteralPath $Script:LogFolder)) {
+    New-Item -ItemType Directory -Path $Script:LogFolder -Force | Out-Null
+}
+$Script:LogFile = Join-Path $Script:LogFolder "$Script:ToolName.log"
 $Script:RunUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $Script:SettingsDirectory = Join-Path $env:LOCALAPPDATA "DeploymentBunny"
 $Script:SettingsFile = Join-Path $Script:SettingsDirectory "Convert-TSxWIM2VHDUI.settings.json"
-$Script:LogoPath = Join-Path $env:TEMP "deploymentbunnylogo.png"
+$Script:LogoPath = $null
 $Script:WimImages = @()
 
 function Write-TSxLog {
@@ -85,25 +89,19 @@ function Show-TSxDialog {
     [void][System.Windows.Forms.MessageBox]::Show($Owner, $Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
 }
 
-$removeVmUi2Path = Join-Path (Split-Path -Parent $PSScriptRoot) "RemoveVMwUI2\RemoveVMwUI2.ps1"
-if (Test-Path -Path $removeVmUi2Path) {
-    try {
-        $removeVmUi2Content = Get-Content -Path $removeVmUi2Path -Raw -ErrorAction Stop
-        if ($removeVmUi2Content -match '\$PictureString\s*=\s*"(?<base64>[A-Za-z0-9\+/=]+)"') {
-            $imageBytes = [Convert]::FromBase64String($matches['base64'])
-            [System.IO.File]::WriteAllBytes($Script:LogoPath, $imageBytes)
-            Write-TSxLog -Message ("Logo generated from RemoveVMwUI2 payload: {0}" -f $Script:LogoPath)
-        }
-        else {
-            Write-TSxLog -Message "Logo payload not found in RemoveVMwUI2.ps1"
-        }
-    }
-    catch {
-        Write-TSxLog -Message ("Failed to generate logo from RemoveVMwUI2 payload. Error: {0}" -f $_.Exception.Message)
-    }
+$localLogoCandidates = @(
+    (Join-Path $PSScriptRoot 'deploymentbunnylogo.png'),
+    (Join-Path $PSScriptRoot 'deploymentbunnylogo.jpg'),
+    (Join-Path $PSScriptRoot 'deploymentbunnylogo.jpeg')
+)
+
+$resolvedLogo = $localLogoCandidates | Where-Object { Test-Path -Path $_ -PathType Leaf } | Select-Object -First 1
+if ($null -ne $resolvedLogo) {
+    $Script:LogoPath = $resolvedLogo
+    Write-TSxLog -Message ("Using local logo file: {0}" -f $Script:LogoPath)
 }
 else {
-    Write-TSxLog -Message ("RemoveVMwUI2 script not found at expected path: {0}" -f $removeVmUi2Path)
+    Write-TSxLog -Message "No local logo file found in this folder. Expected one of: deploymentbunnylogo.png, deploymentbunnylogo.jpg, deploymentbunnylogo.jpeg"
 }
 
 function Save-UISettings {
