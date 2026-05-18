@@ -19,14 +19,21 @@ same path as the ESD file and changes the extension to .wim.
 .PARAMETER Force
 Overwrites an existing WIM file.
 
+.PARAMETER Index
+Optional image index list to export from the ESD (for example 1,2,3).
+If omitted, all image indexes are exported.
+
 .EXAMPLE
 .\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd"
 
 .EXAMPLE
 $download | .\Convert-TSxToWIM.ps1 -Verbose
 
+.EXAMPLE
+.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
+
 .NOTES
-Version: 1.0.5
+Version: 1.0.6
 Date: 2026-05-18
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -36,6 +43,7 @@ param(
 
 	[string]$EsdPath,
 	[string]$WimPath,
+	[int[]]$Index,
 	[switch]$Force
 )
 
@@ -189,6 +197,8 @@ function Convert-EsdPathToWim {
 		[Parameter(Mandatory = $true)]
 		[string]$WimPath,
 
+		[int[]]$Index,
+
 		[switch]$Force
 	)
 
@@ -237,11 +247,24 @@ function Convert-EsdPathToWim {
 		throw "No image indexes were found in $EsdPath"
 	}
 
-	Write-ConversionStatus "Starting conversion of $EsdPath to $WimPath ($($images.Count) image index(es))."
+	$imagesToExport = @($images)
+	if ($PSBoundParameters.ContainsKey('Index') -and $Index.Count -gt 0) {
+		$availableIndexes = @($images | ForEach-Object { [int]$_.ImageIndex })
+		$requestedIndexes = @($Index | Select-Object -Unique)
+		$missingIndexes = @($requestedIndexes | Where-Object { $_ -notin $availableIndexes })
+		if ($missingIndexes.Count -gt 0) {
+			throw "Requested image index(es) were not found in $EsdPath: $($missingIndexes -join ', ')"
+		}
 
-	$totalImages = $images.Count
+		$imagesToExport = @($images | Where-Object { [int]$_.ImageIndex -in $requestedIndexes })
+		Write-ConversionStatus "Index filter applied. Exporting index(es): $($requestedIndexes -join ', ')"
+	}
+
+	Write-ConversionStatus "Starting conversion of $EsdPath to $WimPath ($($imagesToExport.Count) image index(es))."
+
+	$totalImages = $imagesToExport.Count
 	$currentImage = 0
-	foreach ($image in $images) {
+	foreach ($image in $imagesToExport) {
 		$currentImage++
 		$index = [int]$image.ImageIndex
 		$imageLabel = if ([string]::IsNullOrWhiteSpace([string]$image.ImageName)) { "Index $index" } else { "Index $index - $($image.ImageName)" }
@@ -284,8 +307,9 @@ try {
 	foreach ($item in $items) {
 		$resolvedEsdPath = Resolve-EsdSourcePath -InputObject $item -EsdPath $EsdPath
 		$resolvedWimPath = if ([string]::IsNullOrWhiteSpace($WimPath)) { [System.IO.Path]::ChangeExtension($resolvedEsdPath, '.wim') } else { $WimPath }
-		Write-TSxLog -Message "Resolved conversion job. EsdPath=$resolvedEsdPath; WimPath=$resolvedWimPath"
-		$finalWimPath = Convert-EsdPathToWim -EsdPath $resolvedEsdPath -WimPath $resolvedWimPath -Force:$Force -WhatIf:$WhatIfPreference
+		$indexText = if ($PSBoundParameters.ContainsKey('Index') -and $Index.Count -gt 0) { $Index -join ',' } else { 'all' }
+		Write-TSxLog -Message "Resolved conversion job. EsdPath=$resolvedEsdPath; WimPath=$resolvedWimPath; Index=$indexText"
+		$finalWimPath = Convert-EsdPathToWim -EsdPath $resolvedEsdPath -WimPath $resolvedWimPath -Index $Index -Force:$Force -WhatIf:$WhatIfPreference
 
 		[PSCustomObject]@{
 			EsdPath   = $resolvedEsdPath
