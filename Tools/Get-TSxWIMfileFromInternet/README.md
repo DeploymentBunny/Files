@@ -3,6 +3,7 @@
 This folder contains small scripts that help you:
 
 - See available Windows installation files (ESD)
+- Inspect which images exist inside an ESD file
 - Download the file you want
 - Convert ESD to WIM format now or later
 - Refresh the Microsoft catalog list
@@ -24,6 +25,7 @@ Optional (only needed for ESD to WIM conversion):
 ## Files in this folder
 
 - Show-TSxESDFiles.ps1: Lists available ESD files
+- Get-TSxESDInfo.ps1: Shows which image indexes exist inside an ESD file
 - Get-TSxESDDownloader.ps1: Downloads selected ESD and can optionally start conversion
 - Convert-TSxToWIM.ps1: Converts an existing ESD file to WIM
 - Update-TSxESDCatalogs.ps1: Updates local catalog XML files used by the list command
@@ -48,8 +50,9 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 1. Refresh the catalog list (optional but recommended).
 2. List available ESD files.
 3. Filter to the one you need.
-4. Download it.
-5. Optional: Convert to WIM now or later.
+4. Optional: Inspect image indexes inside the ESD file.
+5. Download it.
+6. Optional: Convert to WIM now or later.
 
 ---
 
@@ -89,7 +92,22 @@ Output as JSON (for integrations):
 .\Show-TSxESDFiles.ps1 -AsJson
 ~~~
 
-## 3) Download an ESD file
+## 3) Inspect images inside an ESD file
+
+Use this to see which image indexes exist before converting to WIM.
+
+~~~powershell
+.\Get-TSxESDInfo.ps1 -EsdPath "C:\Temp\ESD\install.esd"
+~~~
+
+Use downloaded output directly:
+
+~~~powershell
+$download = .\Get-TSxESDDownloader.ps1 -Url "https://example.com/install.esd"
+$download | .\Get-TSxESDInfo.ps1
+~~~
+
+## 4) Download an ESD file
 
 Downloads use the Windows Background Intelligent Transfer Service (BITS) when available.
 This is usually better for large files and unstable connections. If BITS is not available,
@@ -126,7 +144,7 @@ To see these decisions while running, use -Verbose:
 $choice | .\Get-TSxESDDownloader.ps1 -OutputPath "C:\Temp\ESD" -Verbose
 ~~~
 
-## 4) Convert ESD to WIM (optional)
+## 5) Convert ESD to WIM (optional)
 
 Use this only if you need WIM format.
 The script now shows a progress bar during conversion. Add -Verbose if you also want status messages for each exported image.
@@ -135,6 +153,12 @@ Convert a file later from its ESD path:
 
 ~~~powershell
 .\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim"
+~~~
+
+Convert only selected image indexes:
+
+~~~powershell
+.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
 ~~~
 
 Convert directly from downloaded output:
@@ -149,6 +173,13 @@ If you still want a single step, the downloader can start the converter for you:
 ~~~powershell
 $choice = .\Show-TSxESDFiles.ps1 -Language en-us -Architecture amd64 -Version 24H2 | Select-Object -First 1
 $choice | .\Get-TSxESDDownloader.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -WimPath "C:\Temp\ESD\install.wim"
+~~~
+
+Single-step conversion with selected indexes:
+
+~~~powershell
+$choice = .\Show-TSxESDFiles.ps1 -Language en-us -Architecture amd64 -Version 24H2 | Select-Object -First 1
+$choice | .\Get-TSxESDDownloader.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -Index 1,2
 ~~~
 
 ## Useful filters (plain language)
@@ -209,6 +240,11 @@ WIM conversion fails:
 - Run PowerShell as Administrator
 - Verify there is enough free disk space
 
+ESD info read fails:
+
+- Run PowerShell as Administrator
+- If mounted image health check times out, the script will warn and continue
+
 ## Quick copy/paste examples
 
 List and choose manually:
@@ -231,6 +267,14 @@ Update catalogs then export list as JSON:
 ~~~powershell
 .\Update-TSxESDCatalogs.ps1
 .\Show-TSxESDFiles.ps1 -AsJson | Out-File "C:\Temp\esd-list.json" -Encoding utf8
+~~~
+
+Inspect indexes and then convert only one image:
+
+~~~powershell
+$info = .\Get-TSxESDInfo.ps1 -EsdPath "C:\Temp\ESD\install.esd"
+$info | Format-Table ImageIndex, ImageName, ImageDescription -AutoSize
+.\Convert-TSxToWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -Index 1
 ~~~
 
 ## Version

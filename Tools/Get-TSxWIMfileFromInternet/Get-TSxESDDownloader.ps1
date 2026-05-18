@@ -25,6 +25,10 @@ When set, calls Convert-TSxToWIM.ps1 to convert the downloaded ESD to WIM.
 .PARAMETER WimPath
 Optional destination path for the WIM file.
 
+.PARAMETER Index
+Optional image index list to export when ConvertToWim is used.
+If omitted, all image indexes are exported.
+
 .PARAMETER Force
 Overwrites existing ESD or WIM files.
 
@@ -32,7 +36,7 @@ Overwrites existing ESD or WIM files.
 .\Get-TSxESDDownloader.ps1 -Url "https://example.com/install.esd" -ConvertToWim
 
 .NOTES
-Version: 1.1.0
+Version: 1.1.1
 Date: 2026-05-18
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -45,6 +49,7 @@ param(
 	[string]$OutputPath = (Join-Path $PSScriptRoot 'Downloads'),
 	[switch]$ConvertToWim,
 	[string]$WimPath,
+	[int[]]$Index,
 	[switch]$Force
 )
 
@@ -71,7 +76,8 @@ function Write-TSxLog {
 if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
-Write-TSxLog -Message "Script start. ConvertToWim=$($ConvertToWim.IsPresent); OutputPath=$OutputPath"
+$indexText = if ($PSBoundParameters.ContainsKey('Index') -and $Index.Count -gt 0) { $Index -join ',' } else { 'all' }
+Write-TSxLog -Message "Script start. ConvertToWim=$($ConvertToWim.IsPresent); OutputPath=$OutputPath; Index=$indexText"
 
 function Resolve-DownloadSource {
 	[CmdletBinding()]
@@ -250,8 +256,8 @@ try {
 
 			$resolvedWimPath = if ([string]::IsNullOrWhiteSpace($WimPath)) { [System.IO.Path]::ChangeExtension($downloadedPath, '.wim') } else { $WimPath }
 			if (-not $WhatIfPreference) {
-				Write-TSxLog -Message "Starting converter script for ESD=$downloadedPath WIM=$resolvedWimPath"
-				$null = & $converterScript -EsdPath $downloadedPath -WimPath $resolvedWimPath -Force:$Force -Verbose:$($VerbosePreference -ne 'SilentlyContinue')
+				Write-TSxLog -Message "Starting converter script for ESD=$downloadedPath WIM=$resolvedWimPath Index=$indexText"
+				$null = & $converterScript -EsdPath $downloadedPath -WimPath $resolvedWimPath -Index $Index -Force:$Force -Verbose:$($VerbosePreference -ne 'SilentlyContinue')
 				Write-TSxLog -Message "Converter script completed for ESD=$downloadedPath"
 			}
 		}
