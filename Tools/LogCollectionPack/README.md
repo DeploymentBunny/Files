@@ -9,7 +9,8 @@ It gathers:
 - Performance data (CPU, memory, disk, network)
 - Patch and role information
 - Health checks (DISM, optional deep checks)
-- Role-specific diagnostics (if DNS, DHCP, AD, or CA roles exist)
+- Crash dump and WER artifacts (when present)
+- Role-specific diagnostics (if DNS, DHCP, AD, CA, Hyper-V, Cluster, S2D, SAN/RDMA exist)
 
 ## Who This Is For
 This guide is written for non-IT staff who need to run the collection and send the results to support or an IT team.
@@ -60,6 +61,11 @@ You need:
 .\Collect-WindowsServerLogs.ps1 -DeepHealth
 ```
 
+### Show detailed progress/decision logging
+```powershell
+.\Collect-WindowsServerLogs.ps1 -Verbose
+```
+
 ### Do not create ZIP
 ```powershell
 .\Collect-WindowsServerLogs.ps1 -NoZip
@@ -81,6 +87,11 @@ Inside it, you will see folders like:
 - `EventLogs`
 - `Performance`
 - `Analytic-Ready`
+
+Notable outputs include:
+- EventLogs\Converted (EVTX converted to TXT/XML/CSV)
+- Health\CrashDumps\CrashDump_Presence.txt (YES/NO + count)
+- Health\WER (WER files + parsed `.wer` CSV)
 
 If ZIP is enabled (default), a ZIP file is also created in the output root.
 
@@ -113,6 +124,10 @@ Fix: Use the output folder directly and send that folder.
 Cause: Large logs and/or deep health checks.
 Fix: Wait for completion, or rerun without `-DeepHealth` if not required.
 
+### iSCSI errors when service is stopped
+Cause: Microsoft iSCSI Initiator service is installed but not running.
+Fix: Current script version auto-skips iSCSI collection when `MSiSCSI` is not running.
+
 ## Parameters (Plain Language)
 - `-OutputRoot`: Where to place results. Default is `C:\WS-Diagnostics`.
 - `-DurationMinutes`: How long performance data is sampled. Default `10`.
@@ -121,13 +136,17 @@ Fix: Wait for completion, or rerun without `-DeepHealth` if not required.
 - `-IncludeFullCBS`: Collect full CBS log instead of last part only.
 - `-NoZip`: Skip ZIP creation.
 - `-ValidateCounters`: Test performance counters before collection.
-- `-JavaMetrics`: Include Java process metrics (enabled by default).
 - `-ExcludeEvtxFromZip`: Keep EVTX out of ZIP while keeping converted files.
+
+Notes:
+- Java metrics are auto-detected (collected only when java.exe processes exist).
+- Missing performance counters are handled silently and skipped.
+- Cluster logs are collected with full available history (no time-span limit parameter).
 
 ## Version
 - Script name: `Collect-WindowsServerLogs.ps1`
-- Script version: `5.4`
-- Last updated in script header: `2026-05-07`
+- Script version: `5.6.2`
+- Last updated in script header: `2026-05-19`
 
 ## Contact
 - Deployment Bunny: https://www.deploymentbunny.com
