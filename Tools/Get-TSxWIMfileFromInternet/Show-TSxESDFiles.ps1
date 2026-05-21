@@ -28,22 +28,36 @@ Optional activation channel filter, for example Retail or Volume.
 .\Show-TSxESDFiles.ps1 -Architecture amd64 -Language en-us
 
 .NOTES
-Version: 1.1.1
-Date: 2026-05-18
+	FileName:    Show-TSxESDFiles.ps1
+	Version:     1.2.5
+	Author:      Mikael Nystrom
+	Contact:     deploymentbunny@outlook.com
+	Created:     2026-04-23
+	Updated:     2026-05-21
+	Twitter:     @mikael_nystrom
+
+	Disclaimer:
+	This script is provided "AS IS" with no warranties, confers no rights and
+	is not supported by the author.
+.LINK
+	https://www.deploymentbunny.com
 #>
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
 	[switch]$AsJson,
 	[string]$CatalogPath,
+	[ValidateSet('amd64', 'arm64')]
 	[string]$Architecture,
-	[string]$Language,
 	[string]$Version,
+	[string]$Language,
+	[ValidateSet('Volume', 'Retail')]
 	[string]$OSLicense
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Script:LogRootPath = Join-Path $env:TEMP 'TSxWimFileFromInternet'
+$Script:LogRootPath = Join-Path $env:TEMP 'Get-TSxWIMfileFromInternet'
 $Script:LogFilePath = Join-Path $Script:LogRootPath ("{0}.log" -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
 
 function Write-TSxLog {
@@ -53,17 +67,24 @@ function Write-TSxLog {
 		[string]$Message,
 
 		[ValidateSet('INFO', 'WARN', 'ERROR')]
-		[string]$Level = 'INFO'
+		[string]$Level = 'INFO',
+
+		[switch]$WriteVerbose
 	)
 
 	$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
-	Add-Content -Path $Script:LogFilePath -Value "$timestamp [$Level] $Message"
+	$entry = "$timestamp [$Level] $Message"
+	Add-Content -Path $Script:LogFilePath -Value $entry
+
+	if ($WriteVerbose) {
+		Write-Verbose $entry
+	}
 }
 
 if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
-Write-TSxLog -Message "Script start. AsJson=$($AsJson.IsPresent); CatalogPath=$CatalogPath"
+Write-TSxLog -Message "Script start. AsJson=$($AsJson.IsPresent); CatalogPath=$CatalogPath" -WriteVerbose
 
 # Catalog XML files (MCT format) ship alongside this script in the Catalogs subfolder.
 # To use a different set of XML files, supply -CatalogPath.
@@ -273,7 +294,23 @@ function Get-OSDCloudEsdFiles {
 		Sort-Object -Property @{ Expression = { $_.OperatingSystem }; Descending = $true }, OSArchitecture, OSActivation, OSLanguageCode
 }
 
+function Test-ExecutionPrerequisites {
+	[CmdletBinding()]
+	param()
+
+	if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
+		throw 'This script requires Windows PowerShell 5.1.'
+	}
+
+	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		throw 'This script must be run from an elevated Windows PowerShell 5.1 session (Run as Administrator).'
+	}
+}
+
 try {
+	Test-ExecutionPrerequisites
 	$downloads = Get-OSDCloudEsdFiles -CatalogPath $CatalogPath
 	Write-TSxLog -Message "Loaded $(Get-CollectionCount -InputObject $downloads) ESD record(s) before filtering."
 
@@ -301,9 +338,9 @@ try {
 		$downloads
 	}
 } catch {
-	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)"
+	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose
 	throw
 } finally {
-	Write-TSxLog -Message 'Script end.'
+	Write-TSxLog -Message 'Script end.' -WriteVerbose
 }
 

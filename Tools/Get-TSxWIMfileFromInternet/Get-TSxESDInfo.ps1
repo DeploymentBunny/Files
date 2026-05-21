@@ -19,10 +19,21 @@ Path to the source ESD file.
 $download | .\Get-TSxESDInfo.ps1
 
 .NOTES
-Version: 1.0.7
-Date: 2026-05-18
+	FileName:    Get-TSxESDInfo.ps1
+	Version:     1.1.6
+	Author:      Mikael Nystrom
+	Contact:     deploymentbunny@outlook.com
+	Created:     2026-04-23
+	Updated:     2026-05-21
+	Twitter:     @mikael_nystrom
+
+	Disclaimer:
+	This script is provided "AS IS" with no warranties, confers no rights and
+	is not supported by the author.
+.LINK
+	https://www.deploymentbunny.com
 #>
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
 	[Parameter(ValueFromPipeline = $true)]
 	[object]$InputObject,
@@ -33,8 +44,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Script:LogRootPath = Join-Path $env:TEMP 'TSxWimFileFromInternet'
+$Script:LogRootPath = Join-Path $env:TEMP 'Get-TSxWIMfileFromInternet'
 $Script:LogFilePath = Join-Path $Script:LogRootPath ("{0}.log" -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
+$Script:DismLogPath = Join-Path $Script:LogRootPath 'dism.log'
 
 function Write-TSxLog {
 	[CmdletBinding()]
@@ -43,17 +55,24 @@ function Write-TSxLog {
 		[string]$Message,
 
 		[ValidateSet('INFO', 'WARN', 'ERROR')]
-		[string]$Level = 'INFO'
+		[string]$Level = 'INFO',
+
+		[switch]$WriteVerbose
 	)
 
 	$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
-	Add-Content -Path $Script:LogFilePath -Value "$timestamp [$Level] $Message"
+	$entry = "$timestamp [$Level] $Message"
+	Add-Content -Path $Script:LogFilePath -Value $entry
+
+	if ($WriteVerbose) {
+		Write-Verbose $entry
+	}
 }
 
 if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
-Write-TSxLog -Message 'Script start.'
+Write-TSxLog -Message 'Script start.' -WriteVerbose
 
 function Write-InfoStatus {
 	[CmdletBinding()]
@@ -129,132 +148,137 @@ function Get-EsdImageInfo {
 		[string]$EsdPath
 	)
 
+	function Invoke-DismCommand {
+		[CmdletBinding()]
+		param(
+			[Parameter(Mandatory = $true)]
+			[string[]]$Arguments
+		)
+
+		$argumentText = $Arguments -join ' '
+		$quotedDismLogPath = '"{0}"' -f $Script:DismLogPath
+		$allArguments = @($Arguments + "/LogPath:$quotedDismLogPath")
+		$argumentText = $allArguments -join ' '
+		Write-TSxLog -Message "Executing DISM command: dism.exe $argumentText" -WriteVerbose
+
+		$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+		$startInfo.FileName = 'dism.exe'
+		$startInfo.Arguments = $argumentText
+		$startInfo.UseShellExecute = $false
+		$startInfo.RedirectStandardOutput = $true
+		$startInfo.RedirectStandardError = $true
+		$startInfo.CreateNoWindow = $true
+
+		$process = New-Object System.Diagnostics.Process
+		$process.StartInfo = $startInfo
+		if (-not $process.Start()) {
+			throw 'Unable to start DISM process.'
+		}
+
+		if (-not $process.WaitForExit(300000)) {
+			try {
+				$process.Kill()
+			} catch {
+			}
+			throw 'Timed out waiting for DISM command to complete.'
+		}
+
+		$stdout = $process.StandardOutput.ReadToEnd()
+		$stderr = $process.StandardError.ReadToEnd()
+		Write-TSxLog -Message "DISM command completed with exit code $($process.ExitCode)." -WriteVerbose
+		if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+			Write-TSxLog -Level 'WARN' -Message "DISM stderr: $($stderr.Trim())" -WriteVerbose
+		}
+
+		[PSCustomObject]@{
+			ExitCode = $process.ExitCode
+			StdOut = $stdout
+			StdErr = $stderr
+		}
+	}
+
+	function ConvertFrom-DismWimInfoOutput {
+		[CmdletBinding()]
+		param(
+			[Parameter(Mandatory = $true)]
+			[string]$OutputText
+		)
+
+		$results = New-Object System.Collections.Generic.List[object]
+		$current = $null
+		foreach ($line in ($OutputText -split "`r?`n")) {
+			if ($line -match '^\s*Index\s*:\s*(\d+)\s*$') {
+				if ($null -ne $current) {
+					$results.Add($current)
+				}
+
+				$current = [PSCustomObject]@{
+					ImageIndex = [int]$Matches[1]
+					ImageName = ''
+					ImageDescription = ''
+				}
+				continue
+			}
+
+			if ($null -eq $current) {
+				continue
+			}
+
+			if ($line -match '^\s*Name\s*:\s*(.+?)\s*$') {
+				$current.ImageName = $Matches[1].Trim()
+				continue
+			}
+
+			if ($line -match '^\s*Description\s*:\s*(.+?)\s*$') {
+				$current.ImageDescription = $Matches[1].Trim()
+			}
+		}
+
+		if ($null -ne $current) {
+			$results.Add($current)
+		}
+
+		return $results
+	}
+
 	if (-not (Test-Path -Path $EsdPath)) {
 		throw "ESD file not found: $EsdPath"
 	}
 
 	try {
-		return @(Get-WindowsImage -ImagePath $EsdPath -ErrorAction Stop)
+		$quotedPath = '"{0}"' -f $EsdPath
+		$dismResult = Invoke-DismCommand -Arguments @('/English', '/Get-WimInfo', "/WimFile:$quotedPath")
+		if ($dismResult.ExitCode -ne 0) {
+			$failureText = ($dismResult.StdErr, $dismResult.StdOut | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+			throw "DISM /Get-WimInfo failed for $EsdPath. $failureText"
+		}
+
+		$images = @(ConvertFrom-DismWimInfoOutput -OutputText $dismResult.StdOut)
+		Write-TSxLog -Message "DISM /Get-WimInfo parsed for path: $EsdPath. ImageCount=$(@($images).Count)" -WriteVerbose
+		return $images
 	} catch {
-		throw "Get-WindowsImage failed while reading ESD metadata from $EsdPath. $($_.Exception.Message)"
+		Write-TSxLog -Level 'ERROR' -Message "DISM image info command failed for path: $EsdPath. $($_.Exception.Message)" -WriteVerbose
+		throw "DISM failed while reading ESD metadata from $EsdPath. $($_.Exception.Message)"
 	}
 }
 
-function Test-HealthyMountedImages {
+function Test-ExecutionPrerequisites {
 	[CmdletBinding()]
 	param()
 
-	$startInfo = New-Object System.Diagnostics.ProcessStartInfo
-	$startInfo.FileName = 'dism.exe'
-	$startInfo.Arguments = '/English /Get-MountedWimInfo'
-	$startInfo.UseShellExecute = $false
-	$startInfo.RedirectStandardOutput = $true
-	$startInfo.RedirectStandardError = $true
-	$startInfo.CreateNoWindow = $true
-
-	$process = New-Object System.Diagnostics.Process
-	$process.StartInfo = $startInfo
-	if (-not $process.Start()) {
-		throw 'Unable to start DISM while checking mounted Windows images.'
+	if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
+		throw 'This script requires Windows PowerShell 5.1.'
 	}
 
-	if (-not $process.WaitForExit(15000)) {
-		try {
-			$process.Kill()
-		} catch {
-		}
-
-		throw 'Timed out while checking mounted Windows images. DISM may be blocked by a stale mount state.'
-	}
-
-	$standardOutput = $process.StandardOutput.ReadToEnd()
-	$standardError = $process.StandardError.ReadToEnd()
-	if ($process.ExitCode -ne 0) {
-		$failureText = ($standardError, $standardOutput | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
-		throw "Unable to query mounted Windows images before reading ESD metadata. $failureText"
-	}
-
-	if ($standardOutput -match 'No mounted images found\.') {
-		return
-	}
-
-	$mountedImages = New-Object System.Collections.Generic.List[object]
-	$currentImage = $null
-	foreach ($line in ($standardOutput -split "`r?`n")) {
-		if ($line -match '^Mount Dir\s*:\s*(.+)$') {
-			if ($null -ne $currentImage) {
-				$mountedImages.Add($currentImage)
-			}
-
-			$currentImage = [PSCustomObject]@{
-				ImagePath   = $null
-				Path        = $Matches[1].Trim()
-				MountStatus = ''
-			}
-			continue
-		}
-
-		if ($null -eq $currentImage) {
-			continue
-		}
-
-		if ($line -match '^Image File\s*:\s*(.+)$') {
-			$currentImage.ImagePath = $Matches[1].Trim()
-			continue
-		}
-
-		if ($line -match '^Mount Status\s*:\s*(.+)$') {
-			$currentImage.MountStatus = $Matches[1].Trim()
-		}
-	}
-
-	if ($null -ne $currentImage) {
-		$mountedImages.Add($currentImage)
-	}
-
-	if ($mountedImages.Count -eq 0) {
-		return
-	}
-
-	$potentiallyBroken = New-Object System.Collections.Generic.List[object]
-	foreach ($mountedImage in $mountedImages) {
-		$mountStatus = ''
-		if ($mountedImage.PSObject.Properties['MountStatus']) {
-			$mountStatus = [string]$mountedImage.MountStatus
-		} elseif ($mountedImage.PSObject.Properties['Status']) {
-			$mountStatus = [string]$mountedImage.Status
-		}
-
-		$path = $null
-		if ($mountedImage.PSObject.Properties['Path']) {
-			$path = [string]$mountedImage.Path
-		}
-
-		$pathMissing = $false
-		if (-not [string]::IsNullOrWhiteSpace($path)) {
-			$pathMissing = -not (Test-Path -Path $path)
-		}
-
-		$statusLooksBad = -not [string]::IsNullOrWhiteSpace($mountStatus) -and ($mountStatus -notmatch '^(Ok|Mounted)$')
-		if ($statusLooksBad -or $pathMissing) {
-			$potentiallyBroken.Add([PSCustomObject]@{
-				ImagePath   = [string]$mountedImage.ImagePath
-				Path        = $path
-				MountStatus = $mountStatus
-			})
-		}
-	}
-
-	if ($potentiallyBroken.Count -gt 0) {
-		$brokenSummary = $potentiallyBroken | ForEach-Object {
-			"ImagePath='$($_.ImagePath)', Path='$($_.Path)', MountStatus='$($_.MountStatus)'"
-		}
-
-		throw "Broken or stale mounted image(s) were detected before reading ESD metadata: $($brokenSummary -join '; '). Clean up mounted images and retry."
+	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		throw 'This script must be run from an elevated Windows PowerShell 5.1 session (Run as Administrator).'
 	}
 }
 
 try {
+	Test-ExecutionPrerequisites
 	$items = New-Object System.Collections.Generic.List[object]
 	if ($MyInvocation.ExpectingInput) {
 		foreach ($item in $input) {
@@ -278,17 +302,6 @@ try {
 		}
 
 		Write-InfoStatus 'Administrator check passed.'
-		Write-InfoStatus 'Checking mounted image health...'
-		$mountedCheckStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-		try {
-			Test-HealthyMountedImages
-			$mountedCheckStopwatch.Stop()
-			Write-InfoStatus "Mounted image health check passed in $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
-		} catch {
-			$mountedCheckStopwatch.Stop()
-			Write-TSxLog -Level 'WARN' -Message "Mounted image health check could not be completed: $($_.Exception.Message)"
-			Write-InfoStatus "Mounted image health check could not be completed after $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s). Continuing anyway."
-		}
 		Write-InfoStatus 'Reading ESD image metadata...'
 		$metadataStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
@@ -307,8 +320,8 @@ try {
 		}
 	}
 } catch {
-	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)"
+	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose
 	throw
 } finally {
-	Write-TSxLog -Message 'Script end.'
+	Write-TSxLog -Message 'Script end.' -WriteVerbose
 }

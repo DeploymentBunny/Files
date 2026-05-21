@@ -33,8 +33,19 @@ $download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 .\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -WimPath "C:\Temp\ESD\install.wim" -Index 1,2,3
 
 .NOTES
-Version: 1.0.11
-Date: 2026-05-18
+	FileName:    Convert-TSxESDtoWIM.ps1
+	Version:     1.1.15
+	Author:      Mikael Nystrom
+	Contact:     deploymentbunny@outlook.com
+	Created:     2026-04-23
+	Updated:     2026-05-21
+	Twitter:     @mikael_nystrom
+
+	Disclaimer:
+	This script is provided "AS IS" with no warranties, confers no rights and
+	is not supported by the author.
+.LINK
+	https://www.deploymentbunny.com
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -50,8 +61,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Script:LogRootPath = Join-Path $env:TEMP 'TSxWimFileFromInternet'
+$Script:LogRootPath = Join-Path $env:TEMP 'Get-TSxWIMfileFromInternet'
 $Script:LogFilePath = Join-Path $Script:LogRootPath ("{0}.log" -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
+$Script:DismLogPath = Join-Path $Script:LogRootPath 'dism.log'
 
 function Write-TSxLog {
 	[CmdletBinding()]
@@ -60,17 +72,24 @@ function Write-TSxLog {
 		[string]$Message,
 
 		[ValidateSet('INFO', 'WARN', 'ERROR')]
-		[string]$Level = 'INFO'
+		[string]$Level = 'INFO',
+
+		[switch]$WriteVerbose
 	)
 
 	$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
-	Add-Content -Path $Script:LogFilePath -Value "$timestamp [$Level] $Message"
+	$entry = "$timestamp [$Level] $Message"
+	Add-Content -Path $Script:LogFilePath -Value $entry
+
+	if ($WriteVerbose) {
+		Write-Verbose $entry
+	}
 }
 
 if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
-Write-TSxLog -Message 'Script start.'
+Write-TSxLog -Message 'Script start.' -WriteVerbose
 
 function Write-ConversionStatus {
 	[CmdletBinding()]
@@ -100,7 +119,7 @@ function Resolve-EsdSourcePath {
 	)
 
 	if (-not [string]::IsNullOrWhiteSpace($EsdPath)) {
-		return $EsdPath
+		return $EsdPath.Trim()
 	}
 
 	if (-not $InputObject) {
@@ -110,15 +129,65 @@ function Resolve-EsdSourcePath {
 	foreach ($propertyName in @('EsdPath', 'FilePath', 'FullName')) {
 		$property = $InputObject.PSObject.Properties[$propertyName]
 		if ($property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
-			return [string]$property.Value
+			return ([string]$property.Value).Trim()
 		}
 	}
 
 	if ($InputObject -is [string] -and -not [string]::IsNullOrWhiteSpace($InputObject)) {
-		return [string]$InputObject
+		return ([string]$InputObject).Trim()
 	}
 
 	throw 'Unable to resolve ESD path from pipeline input. Use -EsdPath or pipe an object with EsdPath, FilePath, or FullName.'
+}
+
+function Test-SufficientDiskSpace {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$TargetPath,
+
+		[Parameter(Mandatory = $true)]
+		[long]$RequiredBytes
+	)
+
+	$root = [System.IO.Path]::GetPathRoot($TargetPath)
+	$drive = Get-PSDrive -Name ($root.TrimEnd('\').TrimEnd(':')) -ErrorAction SilentlyContinue
+	if ($null -eq $drive) {
+		$drive = Get-PSDrive | Where-Object { $_.Root -eq $root } | Select-Object -First 1
+	}
+
+	$freeBytes = $null
+	if ($null -ne $drive -and $null -ne $drive.Free) {
+		$freeBytes = $drive.Free
+	} else {
+		try {
+			$driveInfo = New-Object System.IO.DriveInfo($root)
+			$freeBytes = $driveInfo.AvailableFreeSpace
+		} catch {
+			Write-TSxLog -Level 'WARN' -Message "Unable to determine free space on $root. Skipping space check." -WriteVerbose
+			return
+		}
+	}
+
+	$requiredGB = [math]::Round($RequiredBytes / 1GB, 1)
+	$freeGB = [math]::Round($freeBytes / 1GB, 1)
+	Write-TSxLog -Message "Disk space check. Drive=$root Required=${requiredGB}GB Free=${freeGB}GB" -WriteVerbose
+
+	if ($freeBytes -lt $RequiredBytes) {
+		Write-Host "`n" -NoNewline
+		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
+		Write-Host "ERROR: Not enough disk space" -ForegroundColor Red -BackgroundColor Black
+		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
+		Write-Host "Drive:          $root" -ForegroundColor Red
+		Write-Host "Space Required: ${requiredGB} GB" -ForegroundColor Red
+		Write-Host "Space Available: ${freeGB} GB" -ForegroundColor Yellow
+		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
+		Write-Host "Please select another path or free up space." -ForegroundColor Red
+		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
+		Write-Host "`n" -NoNewline
+		Write-TSxLog -Level 'ERROR' -Message "Insufficient disk space. Required: ${requiredGB} GB, Available: ${freeGB} GB on $root" -WriteVerbose
+		exit 1
+	}
 }
 
 function Get-EsdImageInfo {
@@ -128,124 +197,110 @@ function Get-EsdImageInfo {
 		[string]$EsdPath
 	)
 
+	function Invoke-DismCommand {
+		[CmdletBinding()]
+		param(
+			[Parameter(Mandatory = $true)]
+			[string[]]$Arguments
+		)
+
+		$quotedDismLogPath = '"{0}"' -f $Script:DismLogPath
+		$allArguments = @($Arguments + "/LogPath:$quotedDismLogPath")
+		$argumentText = ($allArguments | ForEach-Object { $_ -replace "`r", '\\r' -replace "`n", '\\n' }) -join ' '
+		Write-TSxLog -Message "Executing DISM command: dism.exe $argumentText" -WriteVerbose
+
+		$stdout = & dism.exe @allArguments 2>&1 | Out-String
+		$exitCode = $LASTEXITCODE
+		Write-TSxLog -Message "DISM command completed with exit code $exitCode." -WriteVerbose
+
+		[PSCustomObject]@{
+			ExitCode = $exitCode
+			StdOut = $stdout
+			StdErr = ''
+		}
+	}
+
+	function ConvertFrom-DismWimInfoOutput {
+		[CmdletBinding()]
+		param(
+			[Parameter(Mandatory = $true)]
+			[string]$OutputText
+		)
+
+		$results = New-Object System.Collections.Generic.List[object]
+		$current = $null
+		foreach ($line in ($OutputText -split "`r?`n")) {
+			if ($line -match '^\s*Index\s*:\s*(\d+)\s*$') {
+				if ($null -ne $current) {
+					$results.Add($current)
+				}
+
+				$current = [PSCustomObject]@{
+					ImageIndex = [int]$Matches[1]
+					ImageName = ''
+					ImageDescription = ''
+				}
+				continue
+			}
+
+			if ($null -eq $current) {
+				continue
+			}
+
+			if ($line -match '^\s*Name\s*:\s*(.+?)\s*$') {
+				$current.ImageName = $Matches[1].Trim()
+				continue
+			}
+
+			if ($line -match '^\s*Description\s*:\s*(.+?)\s*$') {
+				$current.ImageDescription = $Matches[1].Trim()
+			}
+		}
+
+		if ($null -ne $current) {
+			$results.Add($current)
+		}
+
+		return $results
+	}
+
 	try {
-		return @(Get-WindowsImage -ImagePath $EsdPath -ErrorAction Stop)
+		if ($EsdPath -match "`r|`n") {
+			throw 'ESD path contains invalid newline characters. Provide a clean file path.'
+		}
+
+		$quotedPath = '"{0}"' -f $EsdPath
+		$dismResult = Invoke-DismCommand -Arguments @('/English', '/Get-WimInfo', "/WimFile:$quotedPath")
+		if ($dismResult.ExitCode -ne 0) {
+			$failureText = ($dismResult.StdErr, $dismResult.StdOut | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+			throw "DISM /Get-WimInfo failed for $EsdPath. $failureText"
+		}
+
+		$images = @(ConvertFrom-DismWimInfoOutput -OutputText $dismResult.StdOut)
+		Write-TSxLog -Message "DISM /Get-WimInfo parsed for path: $EsdPath. ImageCount=$(@($images).Count)" -WriteVerbose
+		return $images
 	} catch {
-		throw "Get-WindowsImage failed while reading ESD metadata from $EsdPath. $($_.Exception.Message)"
+		Write-TSxLog -Level 'ERROR' -Message "DISM image info command failed for path: $EsdPath. $($_.Exception.Message)" -WriteVerbose
+		throw "DISM failed while reading ESD metadata from $EsdPath. $($_.Exception.Message)"
 	}
 }
 
-function Test-HealthyMountedImages {
+function Test-ExecutionPrerequisites {
 	[CmdletBinding()]
 	param()
 
-	$startInfo = New-Object System.Diagnostics.ProcessStartInfo
-	$startInfo.FileName = 'dism.exe'
-	$startInfo.Arguments = '/English /Get-MountedWimInfo'
-	$startInfo.UseShellExecute = $false
-	$startInfo.RedirectStandardOutput = $true
-	$startInfo.RedirectStandardError = $true
-	$startInfo.CreateNoWindow = $true
-
-	$process = New-Object System.Diagnostics.Process
-	$process.StartInfo = $startInfo
-	if (-not $process.Start()) {
-		throw 'Unable to start DISM while checking mounted Windows images.'
+	if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
+		throw 'This script requires Windows PowerShell 5.1.'
 	}
 
-	if (-not $process.WaitForExit(15000)) {
-		try {
-			$process.Kill()
-		} catch {
-		}
-
-		throw 'Timed out while checking mounted Windows images. DISM may be blocked by a stale mount state.'
+	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		throw 'This script must be run from an elevated Windows PowerShell 5.1 session (Run as Administrator).'
 	}
 
-	$standardOutput = $process.StandardOutput.ReadToEnd()
-	$standardError = $process.StandardError.ReadToEnd()
-	if ($process.ExitCode -ne 0) {
-		$failureText = ($standardError, $standardOutput | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
-		throw "Unable to query mounted Windows images before conversion. $failureText"
-	}
-
-	if ($standardOutput -match 'No mounted images found\.') {
-		return
-	}
-
-	$mountedImages = New-Object System.Collections.Generic.List[object]
-	$currentImage = $null
-	foreach ($line in ($standardOutput -split "`r?`n")) {
-		if ($line -match '^Mount Dir\s*:\s*(.+)$') {
-			if ($null -ne $currentImage) {
-				$mountedImages.Add($currentImage)
-			}
-
-			$currentImage = [PSCustomObject]@{
-				ImagePath   = $null
-				Path        = $Matches[1].Trim()
-				MountStatus = ''
-			}
-			continue
-		}
-
-		if ($null -eq $currentImage) {
-			continue
-		}
-
-		if ($line -match '^Image File\s*:\s*(.+)$') {
-			$currentImage.ImagePath = $Matches[1].Trim()
-			continue
-		}
-
-		if ($line -match '^Mount Status\s*:\s*(.+)$') {
-			$currentImage.MountStatus = $Matches[1].Trim()
-		}
-	}
-
-	if ($null -ne $currentImage) {
-		$mountedImages.Add($currentImage)
-	}
-
-	if ($mountedImages.Count -eq 0) {
-		return
-	}
-
-	$potentiallyBroken = New-Object System.Collections.Generic.List[object]
-	foreach ($mountedImage in $mountedImages) {
-		$mountStatus = ''
-		if ($mountedImage.PSObject.Properties['MountStatus']) {
-			$mountStatus = [string]$mountedImage.MountStatus
-		} elseif ($mountedImage.PSObject.Properties['Status']) {
-			$mountStatus = [string]$mountedImage.Status
-		}
-
-		$path = $null
-		if ($mountedImage.PSObject.Properties['Path']) {
-			$path = [string]$mountedImage.Path
-		}
-
-		$pathMissing = $false
-		if (-not [string]::IsNullOrWhiteSpace($path)) {
-			$pathMissing = -not (Test-Path -Path $path)
-		}
-
-		$statusLooksBad = -not [string]::IsNullOrWhiteSpace($mountStatus) -and ($mountStatus -notmatch '^(Ok|Mounted)$')
-		if ($statusLooksBad -or $pathMissing) {
-			$potentiallyBroken.Add([PSCustomObject]@{
-				ImagePath   = [string]$mountedImage.ImagePath
-				Path        = $path
-				MountStatus = $mountStatus
-			})
-		}
-	}
-
-	if ($potentiallyBroken.Count -gt 0) {
-		$brokenSummary = $potentiallyBroken | ForEach-Object {
-			"ImagePath='$($_.ImagePath)', Path='$($_.Path)', MountStatus='$($_.MountStatus)'"
-		}
-
-		throw "Broken or stale mounted image(s) were detected before conversion: $($brokenSummary -join '; '). Clean up mounted images and retry."
+	if (-not (Get-Command -Name Export-WindowsImage -ErrorAction SilentlyContinue)) {
+		throw 'Export-WindowsImage cmdlet is not available. Ensure the DISM PowerShell module is installed and available in this session.'
 	}
 }
 
@@ -275,17 +330,14 @@ function Convert-EsdPathToWim {
 	}
 
 	Write-ConversionStatus 'Administrator check passed.'
-	Write-ConversionStatus 'Checking mounted image health...'
-	$mountedCheckStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-	try {
-		Test-HealthyMountedImages
-		$mountedCheckStopwatch.Stop()
-		Write-ConversionStatus "Mounted image health check passed in $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
-	} catch {
-		$mountedCheckStopwatch.Stop()
-		Write-TSxLog -Level 'WARN' -Message "Mounted image health check could not be completed: $($_.Exception.Message)"
-		Write-ConversionStatus "Mounted image health check could not be completed after $($mountedCheckStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s). Continuing anyway."
-	}
+
+	$esdFileInfo = Get-Item -Path $EsdPath -ErrorAction Stop
+	$dismTempBufferBytes = 10GB
+	$wimEstimateBytes = $esdFileInfo.Length * 3
+	$totalRequiredBytes = $dismTempBufferBytes + $wimEstimateBytes
+	Write-ConversionStatus "Checking disk space. ESD size: $([math]::Round($esdFileInfo.Length / 1GB, 1)) GB, estimated WIM: $([math]::Round($wimEstimateBytes / 1GB, 1)) GB, DISM temp buffer: 10 GB."
+	Test-SufficientDiskSpace -TargetPath $WimPath -RequiredBytes $totalRequiredBytes
+	Write-ConversionStatus 'Disk space check passed.'
 
 	$wimDirectory = Split-Path -Path $WimPath -Parent
 	if (-not (Test-Path -Path $wimDirectory)) {
@@ -336,18 +388,75 @@ function Convert-EsdPathToWim {
 		$imageIndex = [uint32]$image.ImageIndex
 		$imageLabel = if ([string]::IsNullOrWhiteSpace([string]$image.ImageName)) { "Index $imageIndex" } else { "Index $imageIndex - $($image.ImageName)" }
 		Write-ConversionStatus "Exporting $imageLabel ($currentImage/$totalImages)..."
-		$percentComplete = [int](($currentImage / $totalImages) * 100)
-		Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Exporting $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
+		$percentComplete = [int]((($currentImage - 1) / $totalImages) * 100)
+		Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Starting $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
 		Write-Verbose "Converting $imageLabel to $WimPath ($currentImage of $totalImages)"
 
 		$action = "Export index $imageIndex from $EsdPath"
 		if ($PSCmdlet.ShouldProcess($WimPath, $action)) {
 			try {
-				Export-WindowsImage -SourceImagePath $EsdPath -SourceIndex $imageIndex -DestinationImagePath $WimPath -CompressionType Max -CheckIntegrity -ErrorAction Stop | Out-Null
+				Write-TSxLog -Message "Executing Export-WindowsImage for index $imageIndex. Destination=$WimPath" -WriteVerbose
+
+				$exportJob = Start-Job -ScriptBlock {
+					param(
+						[string]$SourceImagePath,
+						[uint32]$SourceIndex,
+						[string]$DestinationImagePath,
+						[string]$LogPath
+					)
+
+					Import-Module Dism -ErrorAction Stop
+					Export-WindowsImage -SourceImagePath $SourceImagePath -SourceIndex $SourceIndex -DestinationImagePath $DestinationImagePath -CompressionType Max -CheckIntegrity -LogPath $LogPath -ErrorAction Stop | Out-Null
+				} -ArgumentList $EsdPath, $imageIndex, $WimPath, $Script:DismLogPath
+
+				$exportStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+				while ($true) {
+					$completedJob = Wait-Job -Job $exportJob -Timeout 30
+					if ($null -ne $completedJob) {
+						break
+					}
+
+					$currentWimSizeGBValue = 0
+					if (Test-Path -Path $WimPath -PathType Leaf) {
+						$currentWimSizeGBValue = [math]::Round(((Get-Item -Path $WimPath -ErrorAction SilentlyContinue).Length / 1GB), 2)
+					}
+
+					$elapsedMinutes = [int]$exportStopwatch.Elapsed.TotalMinutes
+					$elapsedSeconds = [int]$exportStopwatch.Elapsed.Seconds
+					$elapsedText = "{0:00}:{1:00}" -f $elapsedMinutes, $elapsedSeconds
+					$currentWimSizeGBText = "{0:00.00}" -f $currentWimSizeGBValue
+
+					Write-ConversionStatus "Still exporting $imageLabel. Elapsed: $elapsedText, current WIM size: ${currentWimSizeGBText} GB"
+				}
+
+				$jobOutput = Receive-Job -Job $exportJob -ErrorAction SilentlyContinue
+				if ($jobOutput) {
+					$null = $jobOutput
+				}
+
+				if ($exportJob.State -ne 'Completed') {
+					$jobError = $null
+					if ($exportJob.ChildJobs -and $exportJob.ChildJobs.Count -gt 0 -and $exportJob.ChildJobs[0].Error.Count -gt 0) {
+						$jobError = [string]$exportJob.ChildJobs[0].Error[0]
+					}
+					if ([string]::IsNullOrWhiteSpace($jobError)) {
+						$jobError = "Export job state was $($exportJob.State)."
+					}
+					throw "Export-WindowsImage failed while exporting index $imageIndex from $EsdPath. $jobError"
+				}
+
+				Write-TSxLog -Message "Export-WindowsImage completed for index $imageIndex." -WriteVerbose
+
+				$percentComplete = [int](($currentImage / $totalImages) * 100)
+				Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Completed $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
 			} catch {
 				Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Completed
 				Write-TSxLog -Level 'ERROR' -Message "Export-WindowsImage failed for index $imageIndex. $($_.Exception.Message)"
 				throw "Export-WindowsImage failed while exporting index $imageIndex from $EsdPath. $($_.Exception.Message)"
+			} finally {
+				if ($null -ne $exportJob) {
+					Remove-Job -Job $exportJob -Force -ErrorAction SilentlyContinue
+				}
 			}
 		}
 	}
@@ -358,6 +467,7 @@ function Convert-EsdPathToWim {
 }
 
 try {
+	Test-ExecutionPrerequisites
 	$items = New-Object System.Collections.Generic.List[object]
 	if ($MyInvocation.ExpectingInput) {
 		foreach ($item in $input) {
@@ -373,9 +483,9 @@ try {
 
 	foreach ($item in $items) {
 		$resolvedEsdPath = Resolve-EsdSourcePath -InputObject $item -EsdPath $EsdPath
-		$resolvedWimPath = if ([string]::IsNullOrWhiteSpace($WimPath)) { [System.IO.Path]::ChangeExtension($resolvedEsdPath, '.wim') } else { $WimPath }
+		$resolvedWimPath = if ([string]::IsNullOrWhiteSpace($WimPath)) { [System.IO.Path]::ChangeExtension($resolvedEsdPath, '.wim') } else { $WimPath.Trim() }
 		$indexText = if ($PSBoundParameters.ContainsKey('Index') -and $Index.Count -gt 0) { $Index -join ',' } else { 'all' }
-		Write-TSxLog -Message "Resolved conversion job. EsdPath=$resolvedEsdPath; WimPath=$resolvedWimPath; Index=$indexText"
+		Write-TSxLog -Message "Resolved conversion job. EsdPath=[$resolvedEsdPath]; WimPath=[$resolvedWimPath]; Index=$indexText"
 		$finalWimPath = Convert-EsdPathToWim -EsdPath $resolvedEsdPath -WimPath $resolvedWimPath -Index $Index -Force:$Force -WhatIf:$WhatIfPreference
 
 		[PSCustomObject]@{
@@ -385,8 +495,8 @@ try {
 		}
 	}
 } catch {
-	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)"
+	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose
 	throw
 } finally {
-	Write-TSxLog -Message 'Script end.'
+	Write-TSxLog -Message 'Script end.' -WriteVerbose
 }
