@@ -29,7 +29,7 @@ Optional activation channel filter, for example Retail or Volume.
 
 .NOTES
 	FileName:    Show-TSxESDFiles.ps1
-	Version:     1.2.5
+	Version:     1.2.7
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -42,7 +42,7 @@ Optional activation channel filter, for example Retail or Volume.
 .LINK
 	https://www.deploymentbunny.com
 #>
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding()]
 param(
 	[switch]$AsJson,
 	[string]$CatalogPath,
@@ -89,6 +89,7 @@ Write-TSxLog -Message "Script start. AsJson=$($AsJson.IsPresent); CatalogPath=$C
 # Catalog XML files (MCT format) ship alongside this script in the Catalogs subfolder.
 # To use a different set of XML files, supply -CatalogPath.
 $Script:DefaultCatalogPath = Join-Path $PSScriptRoot 'Catalogs'
+$Script:FallbackCatalogPath = Join-Path (Join-Path $env:TEMP 'Get-TSxWIMfileFromInternet') 'Catalog'
 
 function Get-OSDCloudCatalogXmlSource {
 	[CmdletBinding()]
@@ -105,8 +106,18 @@ function Get-OSDCloudCatalogXmlSource {
 	}
 
 	# 2 — bundled Catalogs subfolder (default)
-	Write-Verbose "Using bundled catalogs from: $Script:DefaultCatalogPath"
-	return [PSCustomObject]@{ Mode = 'Local'; Path = $Script:DefaultCatalogPath }
+	if (Test-Path -Path $Script:DefaultCatalogPath) {
+		Write-Verbose "Using bundled catalogs from: $Script:DefaultCatalogPath"
+		return [PSCustomObject]@{ Mode = 'Local'; Path = $Script:DefaultCatalogPath }
+	}
+
+	# 3 — fallback catalog location used by earlier Update script versions
+	if (Test-Path -Path $Script:FallbackCatalogPath) {
+		Write-TSxLog -Level 'WARN' -Message "Bundled Catalogs folder not found, using fallback path: $Script:FallbackCatalogPath" -WriteVerbose
+		return [PSCustomObject]@{ Mode = 'Local'; Path = $Script:FallbackCatalogPath }
+	}
+
+	throw "No catalog path was found. Expected '$Script:DefaultCatalogPath'. Run Update-TSxESDCatalogs.ps1 to download catalog files."
 }
 
 function ConvertTo-OSDCloudOperatingSystemName {
@@ -300,12 +311,6 @@ function Test-ExecutionPrerequisites {
 
 	if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
 		throw 'This script requires Windows PowerShell 5.1.'
-	}
-
-	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
-	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
-	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-		throw 'This script must be run from an elevated Windows PowerShell 5.1 session (Run as Administrator).'
 	}
 }
 

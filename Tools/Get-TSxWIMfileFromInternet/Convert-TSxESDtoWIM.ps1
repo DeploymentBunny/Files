@@ -34,7 +34,7 @@ $download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 
 .NOTES
 	FileName:    Convert-TSxESDtoWIM.ps1
-	Version:     1.1.15
+	Version:     1.1.19
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -98,7 +98,7 @@ function Write-ConversionStatus {
 		[string]$Message
 	)
 
-	Write-Host "[Convert-TSxESDtoWIM] $Message"
+	Write-Verbose "[Convert-TSxESDtoWIM] $Message"
 	Write-TSxLog -Message $Message
 }
 
@@ -174,19 +174,9 @@ function Test-SufficientDiskSpace {
 	Write-TSxLog -Message "Disk space check. Drive=$root Required=${requiredGB}GB Free=${freeGB}GB" -WriteVerbose
 
 	if ($freeBytes -lt $RequiredBytes) {
-		Write-Host "`n" -NoNewline
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "ERROR: Not enough disk space" -ForegroundColor Red -BackgroundColor Black
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "Drive:          $root" -ForegroundColor Red
-		Write-Host "Space Required: ${requiredGB} GB" -ForegroundColor Red
-		Write-Host "Space Available: ${freeGB} GB" -ForegroundColor Yellow
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "Please select another path or free up space." -ForegroundColor Red
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "`n" -NoNewline
-		Write-TSxLog -Level 'ERROR' -Message "Insufficient disk space. Required: ${requiredGB} GB, Available: ${freeGB} GB on $root" -WriteVerbose
-		exit 1
+		$spaceMessage = "Insufficient disk space. Drive: $root Required: ${requiredGB} GB Available: ${freeGB} GB"
+		Write-TSxLog -Level 'ERROR' -Message $spaceMessage -WriteVerbose
+		throw $spaceMessage
 	}
 }
 
@@ -341,7 +331,11 @@ function Convert-EsdPathToWim {
 
 	$wimDirectory = Split-Path -Path $WimPath -Parent
 	if (-not (Test-Path -Path $wimDirectory)) {
-		New-Item -Path $wimDirectory -ItemType Directory -Force | Out-Null
+		if ($PSCmdlet.ShouldProcess($wimDirectory, 'Create destination directory')) {
+			New-Item -Path $wimDirectory -ItemType Directory -Force | Out-Null
+		} else {
+			Write-TSxLog -Message "Skipping destination directory creation due to WhatIf: $wimDirectory" -WriteVerbose
+		}
 	}
 
 	if ((Test-Path -Path $WimPath) -and -not $Force) {
@@ -354,22 +348,26 @@ function Convert-EsdPathToWim {
 		Write-ConversionStatus "Force enabled, removing existing WIM: $WimPath"
 		Write-TSxLog -Level 'WARN' -Message "Force enabled, removing WIM file: $WimPath"
 		Write-Verbose "Force specified, removing existing WIM file before conversion: $WimPath"
-		Remove-Item -Path $WimPath -Force
+		if ($PSCmdlet.ShouldProcess($WimPath, 'Remove existing WIM before conversion')) {
+			Remove-Item -Path $WimPath -Force
+		} else {
+			Write-TSxLog -Message "Skipping WIM removal due to WhatIf: $WimPath" -WriteVerbose
+		}
 	}
 
 	Write-ConversionStatus 'Reading ESD image metadata...'
 	$metadataStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-	$images = Get-EsdImageInfo -EsdPath $EsdPath
+	$images = @(Get-EsdImageInfo -EsdPath $EsdPath)
 	$metadataStopwatch.Stop()
 	Write-ConversionStatus "ESD metadata loaded in $($metadataStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
-	if ($images.Count -eq 0) {
+	if (@($images).Count -eq 0) {
 		throw "No image indexes were found in $EsdPath"
 	}
 
 	$imagesToExport = @($images)
-	if ($PSBoundParameters.ContainsKey('Index') -and $Index.Count -gt 0) {
+	$requestedIndexes = @($Index | Where-Object { $null -ne $_ } | Select-Object -Unique)
+	if ($requestedIndexes.Count -gt 0) {
 		$availableIndexes = @($images | ForEach-Object { [int]$_.ImageIndex })
-		$requestedIndexes = @($Index | Select-Object -Unique)
 		$missingIndexes = @($requestedIndexes | Where-Object { $_ -notin $availableIndexes })
 		if ($missingIndexes.Count -gt 0) {
 			throw "Requested image index(es) were not found in ${EsdPath}: $($missingIndexes -join ', ')"
@@ -484,7 +482,8 @@ try {
 	foreach ($item in $items) {
 		$resolvedEsdPath = Resolve-EsdSourcePath -InputObject $item -EsdPath $EsdPath
 		$resolvedWimPath = if ([string]::IsNullOrWhiteSpace($WimPath)) { [System.IO.Path]::ChangeExtension($resolvedEsdPath, '.wim') } else { $WimPath.Trim() }
-		$indexText = if ($PSBoundParameters.ContainsKey('Index') -and $Index.Count -gt 0) { $Index -join ',' } else { 'all' }
+		$requestedIndexes = @($Index | Where-Object { $null -ne $_ } | Select-Object -Unique)
+		$indexText = if ($requestedIndexes.Count -gt 0) { $requestedIndexes -join ',' } else { 'all' }
 		Write-TSxLog -Message "Resolved conversion job. EsdPath=[$resolvedEsdPath]; WimPath=[$resolvedWimPath]; Index=$indexText"
 		$finalWimPath = Convert-EsdPathToWim -EsdPath $resolvedEsdPath -WimPath $resolvedWimPath -Index $Index -Force:$Force -WhatIf:$WhatIfPreference
 

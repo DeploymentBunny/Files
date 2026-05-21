@@ -277,6 +277,29 @@ $info | Format-Table ImageIndex, ImageName, ImageDescription -AutoSize
 .\Convert-TSxESDtoWIM.ps1 -EsdPath "C:\Temp\ESD\install.esd" -Index 1
 ~~~
 
+Update catalogs, download a filtered ESD, inspect it, then convert index 6:
+
+~~~powershell
+.\Update-TSxESDCatalogs.ps1
+$esddata = .\Show-TSxESDFiles.ps1 -Architecture amd64 -Version 25H2 -Language en-us -OSLicense Volume
+$esdfile = .\Get-TSxESDDownload.ps1 -Url $esddata.FilePath -FileName C:\Temp\($esddata.FileName)
+.\Get-TSxESDInfo.ps1 -EsdPath $esdfile.DownloadedPath
+.\Convert-TSxESDtoWIM.ps1 -EsdPath $esdfile.DownloadedPath -Index 6
+~~~
+
+What each line does:
+
+1. `.\Update-TSxESDCatalogs.ps1`
+	Refreshes the local catalog XML files so your search results are current.
+2. `$esddata = .\Show-TSxESDFiles.ps1 -Architecture amd64 -Version 25H2 -Language en-us -OSLicense Volume`
+	Queries the catalog for 64-bit (`amd64`) Windows `25H2`, language `en-us`, and `Volume` license media, then stores the matching result object(s) in `$esddata`.
+3. `$esdfile = .\Get-TSxESDDownload.ps1 -Url $esddata.FilePath -FileName C:\Temp\($esddata.FileName)`
+	Downloads the ESD from the URL in `FilePath` and saves it using the name from `FileName` under `C:\Temp`, then stores the download result in `$esdfile`.
+4. `.\Get-TSxESDInfo.ps1 -EsdPath $esdfile.DownloadedPath`
+	Reads the downloaded ESD and shows the available image indexes, names, and metadata.
+5. `.\Convert-TSxESDtoWIM.ps1 -EsdPath $esdfile.DownloadedPath -Index 6`
+	Converts only image index `6` from the downloaded ESD into WIM format.
+
 ## Version
 
 Guide date: 2026-05-18

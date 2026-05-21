@@ -20,7 +20,7 @@ $download | .\Get-TSxESDInfo.ps1
 
 .NOTES
 	FileName:    Get-TSxESDInfo.ps1
-	Version:     1.1.6
+	Version:     1.1.7
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -33,7 +33,7 @@ $download | .\Get-TSxESDInfo.ps1
 .LINK
 	https://www.deploymentbunny.com
 #>
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding()]
 param(
 	[Parameter(ValueFromPipeline = $true)]
 	[object]$InputObject,
@@ -81,7 +81,7 @@ function Write-InfoStatus {
 		[string]$Message
 	)
 
-	Write-Host "[Get-TSxESDInfo] $Message"
+	Write-Verbose "[Get-TSxESDInfo] $Message"
 	Write-TSxLog -Message $Message
 }
 

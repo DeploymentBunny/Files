@@ -26,7 +26,7 @@ Overwrites existing ESD files.
 
 .NOTES
 	FileName:    Get-TSxESDDownload.ps1
-	Version:     1.3.1
+	Version:     1.3.2
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -197,19 +197,9 @@ function Test-SufficientDiskSpace {
 	Write-TSxLog -Message "Disk space check. Drive=$root Required=${requiredGB}GB Free=${freeGB}GB" -WriteVerbose
 
 	if ($freeBytes -lt $RequiredBytes) {
-		Write-Host "`n" -NoNewline
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "ERROR: Not enough disk space" -ForegroundColor Red -BackgroundColor Black
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "Drive:          $root" -ForegroundColor Red
-		Write-Host "Space Required: ${requiredGB} GB" -ForegroundColor Red
-		Write-Host "Space Available: ${freeGB} GB" -ForegroundColor Yellow
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "Please select another path or free up space." -ForegroundColor Red
-		Write-Host "----------------------------------------------------------------------" -ForegroundColor Red
-		Write-Host "`n" -NoNewline
-		Write-TSxLog -Level 'ERROR' -Message "Insufficient disk space. Required: ${requiredGB} GB, Available: ${freeGB} GB on $root" -WriteVerbose
-		exit 1
+		$spaceMessage = "Insufficient disk space. Drive: $root Required: ${requiredGB} GB Available: ${freeGB} GB"
+		Write-TSxLog -Level 'ERROR' -Message $spaceMessage -WriteVerbose
+		throw $spaceMessage
 	}
 }
 
@@ -306,7 +296,11 @@ function Save-EsdFile {
 
 	$destinationDirectory = Split-Path -Path $DestinationPath -Parent
 	if (-not (Test-Path -Path $destinationDirectory)) {
-		New-Item -Path $destinationDirectory -ItemType Directory -Force | Out-Null
+		if ($PSCmdlet.ShouldProcess($destinationDirectory, 'Create destination directory')) {
+			New-Item -Path $destinationDirectory -ItemType Directory -Force | Out-Null
+		} else {
+			Write-TSxLog -Message "Skipping destination directory creation due to WhatIf: $destinationDirectory" -WriteVerbose
+		}
 	}
 
 	$remoteFileSizeForSpaceCheck = Get-RemoteFileSize -Url $Url
@@ -341,7 +335,11 @@ function Save-EsdFile {
 	if ((Test-Path -Path $DestinationPath) -and $Force) {
 		Write-Verbose "Force specified, removing existing file before download: $DestinationPath"
 		Write-TSxLog -Level 'WARN' -Message "Force enabled, removing existing file: $DestinationPath"
-		Remove-Item -Path $DestinationPath -Force
+		if ($PSCmdlet.ShouldProcess($DestinationPath, 'Remove existing file before download')) {
+			Remove-Item -Path $DestinationPath -Force
+		} else {
+			Write-TSxLog -Message "Skipping file removal due to WhatIf: $DestinationPath" -WriteVerbose
+		}
 	}
 
 	if ($PSCmdlet.ShouldProcess($DestinationPath, "Download from $Url")) {

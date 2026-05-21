@@ -17,7 +17,7 @@ Re-downloads catalog files even when they already exist and overwrites them.
 
 .NOTES
 	FileName:    Update-TSxESDCatalogs.ps1
-	Version:     1.3.7
+	Version:     1.3.9
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -70,7 +70,7 @@ if (-not $WhatIfPreference -and -not (Test-Path -Path $Script:LogRootPath)) {
 }
 Write-TSxLog -Message "Script start. CatalogPath=$CatalogPath; Force=$($Force.IsPresent); VerboseEnabled=$($VerbosePreference -ne 'SilentlyContinue')" -WriteVerbose
 
-$Script:DefaultCatalogPath = Join-Path $Script:LogRootPath 'Catalog'
+$Script:DefaultCatalogPath = Join-Path $PSScriptRoot 'Catalogs'
 
 function Get-Microsoft25H2CatalogUrl {
 	[CmdletBinding()]
@@ -202,27 +202,19 @@ function Test-ExecutionPrerequisites {
 	if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
 		throw 'This script requires Windows PowerShell 5.1.'
 	}
-
-	$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
-	$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
-	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-		throw 'This script must be run from an elevated Windows PowerShell 5.1 session (Run as Administrator).'
-	}
 }
 
 try {
 	Test-ExecutionPrerequisites
 	$effectiveCatalogPath = if ([string]::IsNullOrWhiteSpace($CatalogPath)) { $Script:DefaultCatalogPath } else { $CatalogPath }
-	Write-Host "[Update-TSxESDCatalogs] Catalog storage path: $effectiveCatalogPath"
+	Write-Verbose "[Update-TSxESDCatalogs] Catalog storage path: $effectiveCatalogPath"
 	Write-TSxLog -Message "Catalog storage path resolved to: $effectiveCatalogPath" -WriteVerbose
 	$result = @(Update-MicrosoftCatalogFiles -CatalogPath $CatalogPath -Force:$Force)
 	Write-TSxLog -Message "Catalog update completed. Updated $(@($result).Count) file(s)." -WriteVerbose
 	$result | Format-Table -AutoSize
-	exit 0
 } catch {
 	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose
-	Write-Error $_
-	exit 1
+	throw
 } finally {
 	Write-TSxLog -Message 'Script end.' -WriteVerbose
 }
