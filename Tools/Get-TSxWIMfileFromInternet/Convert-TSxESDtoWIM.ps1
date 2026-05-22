@@ -34,11 +34,11 @@ $download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 
 .NOTES
 	FileName:    Convert-TSxESDtoWIM.ps1
-	Version:     1.1.19
+	Version:     1.1.20
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-21
+	Updated:     2026-05-22
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -81,7 +81,7 @@ function Write-TSxLog {
 	$entry = "$timestamp [$Level] $Message"
 	Add-Content -Path $Script:LogFilePath -Value $entry
 
-	if ($WriteVerbose) {
+	if ($WriteVerbose -or $VerbosePreference -eq 'Continue') {
 		Write-Verbose $entry
 	}
 }
@@ -89,6 +89,9 @@ function Write-TSxLog {
 if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
+Write-Verbose "[Convert-TSxESDtoWIM] Log root path: $Script:LogRootPath"
+Write-Verbose "[Convert-TSxESDtoWIM] Script log path: $Script:LogFilePath"
+Write-Verbose "[Convert-TSxESDtoWIM] DISM log path: $Script:DismLogPath"
 Write-TSxLog -Message 'Script start.' -WriteVerbose
 
 function Write-ConversionStatus {
@@ -313,6 +316,8 @@ function Convert-EsdPathToWim {
 	}
 
 	Write-ConversionStatus "Preparing conversion. Source: $EsdPath | Destination: $WimPath"
+	Write-ConversionStatus "Resolved source ESD path: $([System.IO.Path]::GetFullPath($EsdPath))"
+	Write-ConversionStatus "Resolved destination WIM path: $([System.IO.Path]::GetFullPath($WimPath))"
 
 	if (-not (Test-IsAdministrator)) {
 		Write-TSxLog -Level 'ERROR' -Message 'Administrator privileges are required for ESD to WIM conversion.'
@@ -330,12 +335,16 @@ function Convert-EsdPathToWim {
 	Write-ConversionStatus 'Disk space check passed.'
 
 	$wimDirectory = Split-Path -Path $WimPath -Parent
+	Write-ConversionStatus "Destination folder path: $wimDirectory"
 	if (-not (Test-Path -Path $wimDirectory)) {
 		if ($PSCmdlet.ShouldProcess($wimDirectory, 'Create destination directory')) {
+			Write-ConversionStatus "Creating destination directory: $wimDirectory"
 			New-Item -Path $wimDirectory -ItemType Directory -Force | Out-Null
 		} else {
 			Write-TSxLog -Message "Skipping destination directory creation due to WhatIf: $wimDirectory" -WriteVerbose
 		}
+	} else {
+		Write-ConversionStatus "Destination directory already exists: $wimDirectory"
 	}
 
 	if ((Test-Path -Path $WimPath) -and -not $Force) {
@@ -360,6 +369,9 @@ function Convert-EsdPathToWim {
 	$images = @(Get-EsdImageInfo -EsdPath $EsdPath)
 	$metadataStopwatch.Stop()
 	Write-ConversionStatus "ESD metadata loaded in $($metadataStopwatch.Elapsed.TotalSeconds.ToString('0.0')) second(s)."
+	foreach ($img in $images) {
+		Write-ConversionStatus "Found image index $($img.ImageIndex): Name='$($img.ImageName)' Description='$($img.ImageDescription)'"
+	}
 	if (@($images).Count -eq 0) {
 		throw "No image indexes were found in $EsdPath"
 	}
@@ -393,7 +405,7 @@ function Convert-EsdPathToWim {
 		$action = "Export index $imageIndex from $EsdPath"
 		if ($PSCmdlet.ShouldProcess($WimPath, $action)) {
 			try {
-				Write-TSxLog -Message "Executing Export-WindowsImage for index $imageIndex. Destination=$WimPath" -WriteVerbose
+				Write-TSxLog -Message "Executing Export-WindowsImage for index $imageIndex. Source=$EsdPath Destination=$WimPath DismLog=$Script:DismLogPath" -WriteVerbose
 
 				$exportJob = Start-Job -ScriptBlock {
 					param(
@@ -444,6 +456,10 @@ function Convert-EsdPathToWim {
 				}
 
 				Write-TSxLog -Message "Export-WindowsImage completed for index $imageIndex." -WriteVerbose
+				if (Test-Path -Path $WimPath -PathType Leaf) {
+					$finalWimSizeGB = [math]::Round(((Get-Item -Path $WimPath).Length / 1GB), 2)
+					Write-ConversionStatus "Current output WIM path: $WimPath (size: $finalWimSizeGB GB)"
+				}
 
 				$percentComplete = [int](($currentImage / $totalImages) * 100)
 				Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Completed $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
@@ -461,6 +477,11 @@ function Convert-EsdPathToWim {
 
 	Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Completed
 	Write-ConversionStatus "Conversion completed: $WimPath"
+	if (Test-Path -Path $WimPath -PathType Leaf) {
+		$completedSizeGB = [math]::Round(((Get-Item -Path $WimPath).Length / 1GB), 2)
+		Write-ConversionStatus "Final output file: $WimPath"
+		Write-ConversionStatus "Final output size: $completedSizeGB GB"
+	}
 	return $WimPath
 }
 
@@ -484,7 +505,8 @@ try {
 		$resolvedWimPath = if ([string]::IsNullOrWhiteSpace($WimPath)) { [System.IO.Path]::ChangeExtension($resolvedEsdPath, '.wim') } else { $WimPath.Trim() }
 		$requestedIndexes = @($Index | Where-Object { $null -ne $_ } | Select-Object -Unique)
 		$indexText = if ($requestedIndexes.Count -gt 0) { $requestedIndexes -join ',' } else { 'all' }
-		Write-TSxLog -Message "Resolved conversion job. EsdPath=[$resolvedEsdPath]; WimPath=[$resolvedWimPath]; Index=$indexText"
+		Write-TSxLog -Message "Resolved conversion job. EsdPath=[$resolvedEsdPath]; WimPath=[$resolvedWimPath]; Index=$indexText" -WriteVerbose
+		Write-TSxLog -Message "Starting conversion job for source '$resolvedEsdPath' to destination '$resolvedWimPath'." -WriteVerbose
 		$finalWimPath = Convert-EsdPathToWim -EsdPath $resolvedEsdPath -WimPath $resolvedWimPath -Index $Index -Force:$Force -WhatIf:$WhatIfPreference
 
 		[PSCustomObject]@{
