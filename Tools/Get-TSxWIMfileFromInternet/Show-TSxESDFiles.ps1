@@ -24,16 +24,19 @@ Optional version filter matching OS version, build, or build version.
 .PARAMETER OSLicense
 Optional activation channel filter, for example Retail or Volume.
 
+.PARAMETER OSName
+Optional operating system name filter, for example Windows 10 or Windows 11.
+
 .EXAMPLE
 .\Show-TSxESDFiles.ps1 -Architecture amd64 -Language en-us
 
 .NOTES
 	FileName:    Show-TSxESDFiles.ps1
-	Version:     1.2.7
+	Version:     1.2.8
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-21
+	Updated:     2026-05-22
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -50,6 +53,8 @@ param(
 	[string]$Architecture,
 	[string]$Version,
 	[string]$Language,
+	[ValidateSet('Windows 10', 'Windows 11')]
+	[string]$OSName,
 	[ValidateSet('Volume', 'Retail')]
 	[string]$OSLicense
 )
@@ -84,7 +89,7 @@ function Write-TSxLog {
 if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
-Write-TSxLog -Message "Script start. AsJson=$($AsJson.IsPresent); CatalogPath=$CatalogPath" -WriteVerbose
+Write-TSxLog -Message "Script start. AsJson=$($AsJson.IsPresent); CatalogPath=$CatalogPath; OSName=$OSName" -WriteVerbose
 
 # Catalog XML files (MCT format) ship alongside this script in the Catalogs subfolder.
 # To use a different set of XML files, supply -CatalogPath.
@@ -319,13 +324,14 @@ try {
 	$downloads = Get-OSDCloudEsdFiles -CatalogPath $CatalogPath
 	Write-TSxLog -Message "Loaded $(Get-CollectionCount -InputObject $downloads) ESD record(s) before filtering."
 
-	if ($Architecture -or $Language -or $Version -or $OSLicense) {
+	if ($Architecture -or $Language -or $Version -or $OSName -or $OSLicense) {
 		$downloads = $downloads | Where-Object {
 			$architectureMatch = Test-FilterMatch -Value $_.OSArchitecture -Filter $Architecture
 			$languageMatch = (Test-FilterMatch -Value $_.OSLanguageCode -Filter $Language) -or (Test-FilterMatch -Value $_.OSLanguage -Filter $Language)
 			$versionMatch = (Test-FilterMatch -Value $_.OSVersion -Filter $Version) -or (Test-FilterMatch -Value $_.OSBuild -Filter $Version) -or (Test-FilterMatch -Value $_.OSBuildVersion -Filter $Version)
+			$osNameMatch = Test-FilterMatch -Value $_.OSName -Filter $OSName
 			$licenseMatch = Test-FilterMatch -Value $_.OSActivation -Filter $OSLicense
-			$architectureMatch -and $languageMatch -and $versionMatch -and $licenseMatch
+			$architectureMatch -and $languageMatch -and $versionMatch -and $osNameMatch -and $licenseMatch
 		}
 		Write-TSxLog -Message "Applied filters. Remaining $(Get-CollectionCount -InputObject $downloads) ESD record(s)."
 	}
