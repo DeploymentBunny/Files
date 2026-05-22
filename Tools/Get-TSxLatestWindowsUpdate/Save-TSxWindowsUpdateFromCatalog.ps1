@@ -1,4 +1,41 @@
-[CmdletBinding(SupportsShouldProcess = $true)]
+<#
+.SYNOPSIS
+Downloads one or more Windows updates from Microsoft Update Catalog.
+
+.DESCRIPTION
+Accepts update objects from the catalog list script, resolves downloadable files for each UpdateId,
+selects the best file for requested architecture, and downloads to a target folder.
+
+.PARAMETER InputObject
+Pipeline input object containing at least UpdateId, and optionally KB, Architecture, and Title.
+
+.PARAMETER Path
+Destination folder for downloaded updates.
+
+.PARAMETER Force
+Overwrites existing destination files and recreates the log file content for the current execution.
+
+.PARAMETER LogPath
+Path to log file. Defaults to %TEMP%\Get-TSxLatestWindowsUpdate\Save-TSxWindowsUpdateFromCatalog.log.
+
+.EXAMPLE
+Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -LatestOnly |
+    .\Save-TSxWindowsUpdateFromCatalog.ps1 -Path 'C:\Temp\Updates' -Verbose -WhatIf
+
+.NOTES
+FileName   : Save-TSxWindowsUpdateFromCatalog.ps1
+Version    : 1.2.5
+Author     : Mikael Nystrom
+Contact    : @mikael_nystrom
+Created    : 2026-05-22
+Updated    : 2026-05-22
+Twitter    : @mikael_nystrom
+Disclaimer : This script is provided "AS IS" with no warranties.
+
+.LINK
+https://www.deploymentbunny.com
+#>
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
     [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
     [ValidateNotNull()]
@@ -9,8 +46,11 @@ param(
     [string]$Path,
 
     [Parameter()]
+    [switch]$Force,
+
+    [Parameter()]
     [ValidateNotNullOrEmpty()]
-    [string]$LogPath = (Join-Path -Path $env:TEMP -ChildPath 'Get-TSxWindowsUpdates.log')
+    [string]$LogPath = (Join-Path -Path (Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate') -ChildPath 'Save-TSxWindowsUpdateFromCatalog.log')
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +70,10 @@ function Start-TSxLog {
 
     if (-not (Test-Path -Path $FilePath)) {
         $null = New-Item -Path $FilePath -ItemType File -Force
+    }
+
+    if ($Force) {
+        Clear-Content -Path $FilePath -Force
     }
 
     $script:ScriptLogFilePath = $FilePath
@@ -155,15 +199,125 @@ function Get-TSxPreferredCatalogFile {
     return $selectedFile
 }
 
+function Invoke-TSxFileDownload {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Url,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DestinationPath,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$UpdateId
+    )
+
+    $progressId = [Math]::Abs($DestinationPath.GetHashCode())
+    if ($progressId -eq 0) {
+        $progressId = 1
+    }
+
+    $request = [System.Net.HttpWebRequest]::Create($Url)
+    $request.Method = 'GET'
+
+    $response = $null
+    $responseStream = $null
+    $fileStream = $null
+
+    $originalProgressPreference = $ProgressPreference
+    $lastPercentPrinted = -1
+    $lastIsePercentPrinted = -10
+    $printedInlineProgress = $false
+    $isIseHost = $Host.Name -match '(?i)ISE'
+    $useInlineConsoleProgress = -not $isIseHost
+
+    try {
+        $ProgressPreference = 'Continue'
+        if ($useInlineConsoleProgress) {
+            Write-Host ('Starting download for update {0}' -f $UpdateId)
+        }
+        $response = $request.GetResponse()
+        $responseStream = $response.GetResponseStream()
+        $fileStream = [System.IO.File]::Open($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+
+        $buffer = New-Object byte[] 81920
+        $totalBytes = [int64]$response.ContentLength
+        $totalRead = [int64]0
+
+        while (($bytesRead = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $fileStream.Write($buffer, 0, $bytesRead)
+            $totalRead += $bytesRead
+
+            if ($totalBytes -gt 0) {
+                $percentComplete = [int](($totalRead * 100) / $totalBytes)
+                $status = '{0:N1} MB / {1:N1} MB' -f ($totalRead / 1MB), ($totalBytes / 1MB)
+                Write-Progress -Id $progressId -Activity ('Downloading update {0}' -f $UpdateId) -Status $status -PercentComplete $percentComplete
+
+                if ($useInlineConsoleProgress -and $percentComplete -ne $lastPercentPrinted) {
+                    Write-Host -NoNewline ("`rDownloading update {0}: {1,3}% ({2})" -f $UpdateId, $percentComplete, $status)
+                    $lastPercentPrinted = $percentComplete
+                    $printedInlineProgress = $true
+                }
+
+                if ($isIseHost -and ($percentComplete -ge ($lastIsePercentPrinted + 10) -or $percentComplete -eq 100)) {
+                    Write-Host ('Downloading update {0}: {1,3}% ({2})' -f $UpdateId, $percentComplete, $status)
+                    $lastIsePercentPrinted = $percentComplete
+                }
+            }
+            else {
+                $status = '{0:N1} MB downloaded' -f ($totalRead / 1MB)
+                Write-Progress -Id $progressId -Activity ('Downloading update {0}' -f $UpdateId) -Status $status
+
+                if ($useInlineConsoleProgress) {
+                    Write-Host -NoNewline ("`rDownloading update {0}: {1}" -f $UpdateId, $status)
+                    $printedInlineProgress = $true
+                }
+                elseif ($isIseHost) {
+                    Write-Host ('Downloading update {0}: {1}' -f $UpdateId, $status)
+                }
+            }
+        }
+
+        if ($printedInlineProgress) {
+            Write-Host ''
+        }
+        if ($useInlineConsoleProgress) {
+            Write-Host ('Completed download for update {0}' -f $UpdateId)
+        }
+    }
+    finally {
+        if ($fileStream) {
+            $fileStream.Dispose()
+        }
+
+        if ($responseStream) {
+            $responseStream.Dispose()
+        }
+
+        if ($response) {
+            $response.Dispose()
+        }
+
+        Write-Progress -Id $progressId -Activity ('Downloading update {0}' -f $UpdateId) -Completed
+        $ProgressPreference = $originalProgressPreference
+    }
+}
+
 $scriptName = Split-Path -Path $PSCommandPath -Leaf
 Start-TSxLog -FilePath $LogPath
 Write-TSxLog -Message ('{0} started' -f $scriptName)
 Write-TSxLog -Message ('Download path: {0}' -f $Path)
+Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
 Write-TSxLog -Message ('Log path: {0}' -f $LogPath)
 
 if (-not (Test-Path -Path $Path)) {
     Write-TSxLog -Message ('Creating download directory: {0}' -f $Path)
-    $null = New-Item -Path $Path -ItemType Directory -Force
+    if ($PSCmdlet.ShouldProcess($Path, 'Create download directory')) {
+        $null = New-Item -Path $Path -ItemType Directory -Force
+    }
 }
 
 $allInputObjects = New-Object System.Collections.Generic.List[object]
@@ -178,7 +332,7 @@ elseif ($PSBoundParameters.ContainsKey('InputObject')) {
 }
 
 if ($allInputObjects.Count -eq 0) {
-    throw 'No input objects were provided. Pipe objects from Get-TSxLatestWindowsUpdateList.ps1 or pass -InputObject.'
+    throw 'No input objects were provided. Pipe objects from Get-TSxWindowsUpdateList.ps1 or pass -InputObject.'
 }
 
 foreach ($currentInputObject in $allInputObjects) {
@@ -217,8 +371,34 @@ foreach ($currentInputObject in $allInputObjects) {
     Write-TSxLog -Message ('Source URL: {0}' -f $selectedFile.Url)
     Write-TSxLog -Message ('Destination: {0}' -f $destinationPath)
 
+    if ((Test-Path -Path $destinationPath) -and -not $Force) {
+        Write-TSxLog -Level 'WARN' -Message ('Skipping existing file (use -Force to overwrite): {0}' -f $destinationPath)
+        [pscustomobject]@{
+            PSTypeName      = 'TSx.WindowsUpdate.DownloadResult'
+            UpdateId        = $updateId
+            KB              = $kb
+            Architecture    = $architecture
+            SourceTitle     = if ($currentInputObject.PSObject.Properties['Title']) { [string]$currentInputObject.Title } else { $null }
+            FileName        = $selectedFile.FileName
+            DownloadUrl     = $selectedFile.Url
+            DestinationPath = $destinationPath
+            LogPath         = $LogPath
+            WasDownloaded   = $false
+            WasSkipped      = $true
+            Forced          = $false
+        }
+        continue
+    }
+
+    if ((Test-Path -Path $destinationPath) -and $Force) {
+        Write-TSxLog -Message ('Force enabled, removing existing file: {0}' -f $destinationPath)
+        if ($PSCmdlet.ShouldProcess($destinationPath, 'Remove existing destination file')) {
+            Remove-Item -Path $destinationPath -Force
+        }
+    }
+
     if ($PSCmdlet.ShouldProcess($destinationPath, ('Download update {0}' -f $updateId))) {
-        Invoke-WebRequest -UseBasicParsing -Uri $selectedFile.Url -OutFile $destinationPath
+        Invoke-TSxFileDownload -Url $selectedFile.Url -DestinationPath $destinationPath -UpdateId $updateId
         Write-TSxLog -Message ('Download completed: {0}' -f $destinationPath)
     }
 
@@ -232,5 +412,8 @@ foreach ($currentInputObject in $allInputObjects) {
         DownloadUrl     = $selectedFile.Url
         DestinationPath = $destinationPath
         LogPath         = $LogPath
+        WasDownloaded   = [bool](-not $WhatIfPreference)
+        WasSkipped      = $false
+        Forced          = [bool]$Force
     }
 }

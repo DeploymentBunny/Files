@@ -39,8 +39,8 @@
 
 .NOTES
     FileName:  Collect-WindowsServerLogs.ps1
-    Version:   5.6.2
-    Updated:   2026-05-19
+    Version:   5.7.2
+    Updated:   2026-05-22
     Author:    Mikael Nystrom
     Contact:   deploymentbunny@outlook.com
     Blog:      https://www.deploymentbunny.com
@@ -594,6 +594,85 @@ $null = New-Item -ItemType Directory -Force -Path $patchDir | Out-Null
 try { Get-HotFix | Sort-Object InstalledOn | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $patchDir 'HotFixes.csv') } catch {}
 try { Export-RolesAndFeatures -Folder $patchDir } catch {}
 
+# -------------------- Group Policy --------------------
+Write-Section "Collecting Group Policy (applied GPOs)"
+$gpoDir = Join-Path $OutDir 'GroupPolicy'
+$null = New-Item -ItemType Directory -Force -Path $gpoDir | Out-Null
+
+# Text summary: names and link order of all applied GPOs
+Invoke-CMD -FilePath 'gpresult.exe' -Arguments '/R /SCOPE COMPUTER' -OutFile (Join-Path $gpoDir 'GPResult_Computer_Summary.txt') | Out-Null
+Invoke-CMD -FilePath 'gpresult.exe' -Arguments '/R' -OutFile (Join-Path $gpoDir 'GPResult_Full_Summary.txt') | Out-Null
+
+# HTML report: full applied GPO configuration (human-readable, suitable for M365 Copilot analysis)
+$gpHtmlPath = Join-Path $gpoDir 'GPResult_Applied.html'
+try { & gpresult.exe /H "$gpHtmlPath" /F 2>&1 | Out-Null } catch { Write-Warning "gpresult /H failed: $_" }
+
+# XML report: full applied GPO configuration (machine-parseable)
+$gpXmlPath = Join-Path $gpoDir 'GPResult_Applied.xml'
+try { & gpresult.exe /X "$gpXmlPath" /F 2>&1 | Out-Null } catch { Write-Warning "gpresult /X failed: $_" }
+
+# Parse applied GPO names from XML into CSV for easy analysis
+try {
+    if (Test-Path -LiteralPath $gpXmlPath) {
+        [xml]$gpXml = Get-Content -LiteralPath $gpXmlPath -Encoding UTF8 -ErrorAction Stop
+        $appliedGpos = New-Object System.Collections.Generic.List[object]
+
+        foreach ($scope in @('ComputerResults','UserResults')) {
+            $gpoNodes = $gpXml.Rsop.$scope.GPO
+            if ($gpoNodes) {
+                foreach ($gpo in $gpoNodes) {
+                    $appliedGpos.Add([PSCustomObject]@{
+                        Scope     = $scope -replace 'Results',''
+                        Name      = $gpo.Name
+                        Enabled   = $gpo.Enabled
+                        Allowed   = $gpo.FilterAllowed
+                        LinkOrder = $gpo.Link.LinkOrder
+                        SOMPath   = $gpo.Link.SOMPath
+                    })
+                }
+            }
+        }
+
+        if ($appliedGpos.Count -gt 0) {
+            Save-ObjectCsv $appliedGpos (Join-Path $gpoDir 'GPResult_AppliedGPOs.csv')
+        }
+    }
+} catch { Write-Warning "GPO XML parsing failed: $_" }
+
+# Registry export: effective policy values written by GPOs
+# HKLM\SOFTWARE\Policies contains the ground-truth of all registry-based policy settings
+try {
+    $regPoliciesPath = Join-Path $gpoDir 'Registry_HKLM_SOFTWARE_Policies.reg'
+    Invoke-CMD -FilePath 'reg.exe' -Arguments "export `"HKLM\SOFTWARE\Policies`" `"$regPoliciesPath`" /y" | Out-Null
+} catch { Write-Warning "Registry policy export failed: $_" }
+
+# Also export as CSV (flattened key/value pairs) for easier analytics consumption
+try {
+    $policyItems = Get-ChildItem -Path 'HKLM:\SOFTWARE\Policies' -Recurse -ErrorAction SilentlyContinue
+    if ($policyItems) {
+        $policyValues = foreach ($item in $policyItems) {
+            try {
+                $props = Get-ItemProperty -LiteralPath $item.PSPath -ErrorAction SilentlyContinue
+                if ($props) {
+                    foreach ($prop in ($props.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' })) {
+                        [PSCustomObject]@{
+                            RegistryKey = $item.PSPath -replace 'Microsoft.PowerShell.Core\\Registry::',''
+                            ValueName   = $prop.Name
+                            Value       = $prop.Value
+                            ValueType   = $prop.TypeNameOfValue
+                        }
+                    }
+                }
+            } catch {}
+        }
+        if ($policyValues) {
+            Save-ObjectCsv $policyValues (Join-Path $gpoDir 'Registry_HKLM_SOFTWARE_Policies.csv')
+        }
+    }
+} catch { Write-Warning "Registry policy CSV export failed: $_" }
+
+Write-Detail "Group Policy collection completed"
+
 # -------------------- Health Checks (DISM/SFC) --------------------
 Write-Section "Running health checks (DISM/SFC)"
 $healthDir = Join-Path $OutDir 'Health'
@@ -1002,11 +1081,12 @@ $eventLogs = @(
     'Microsoft-Windows-Servicing/Operational',
     'Microsoft-Windows-WER-SystemErrorReporting/Operational',
     'Microsoft-Windows-WER-Diag/Operational',
-    'Microsoft-Windows-WER-PayloadHealth/Operational'
+    'Microsoft-Windows-WER-PayloadHealth/Operational',
+    'Microsoft-Windows-GroupPolicy/Operational'
 )
 
 if ($roles.IsADDS) {
-    $eventLogs += @('Directory Service','DFS Replication','Microsoft-Windows-GroupPolicy/Operational','Microsoft-Windows-Kerberos/Operational')
+    $eventLogs += @('Directory Service','DFS Replication','Microsoft-Windows-Kerberos/Operational')
 }
 if ($roles.IsDNS)  { $eventLogs += @('DNS Server','Microsoft-Windows-DNS-Server/Operational') }
 if ($roles.IsDHCP) { $eventLogs += @('Microsoft-Windows-DHCP-Server/Operational') }
@@ -1269,6 +1349,10 @@ $toCopy = @(
     (Join-Path $sysDir    'NetInterfaceSummary.csv'),
     (Join-Path $patchDir  'HotFixes.csv'),
     (Join-Path $patchDir  'WindowsFeatures_Installed.csv'),
+    (Join-Path $gpoDir    'GPResult_Full_Summary.txt'),
+    (Join-Path $gpoDir    'GPResult_AppliedGPOs.csv'),
+    (Join-Path $gpoDir    'GPResult_Applied.xml'),
+    (Join-Path $gpoDir    'Registry_HKLM_SOFTWARE_Policies.csv'),
     (Join-Path $healthDir 'DISM_CheckHealth.txt'),
     (Join-Path $healthDir 'SFC_VerifyOnly.txt'),
     (Join-Path $healthDir 'Logs\CBS_tail5000.log'),
@@ -1306,7 +1390,7 @@ try {
 } catch {}
 
 $readme = @"
-Windows Server Health & Performance Collection (v5.6.2)
+Windows Server Health & Performance Collection (v5.7.2)
 Computer:  $computer
 Timestamp: $timestamp
 
@@ -1314,6 +1398,7 @@ Folders:
 - System: system summary, time sync, networking, storage, processes, services, optional java.exe metrics
 - PatchAndRoles: installed hotfixes and Windows roles/features (ServerManager or DISM fallback)
 - Health: DISM/SFC health results, CBS/DISM logs, crash dumps (with inventory CSV), WER artifacts (parsed .wer + binary inventory CSV)
+- GroupPolicy: applied GPO names and full configuration (gpresult /R text, /X XML, /H HTML, parsed CSV)
 - RoleSpecific: AD/CA/DNS/DHCP/Hyper-V/Cluster/S2D + RDMA + SAN artifacts
 - EventLogs: exported .evtx channels; see FoundVsSkipped.txt
 - EventLogs\Converted: EVTX converted to TXT/XML/CSV (capped by -EvtxMaxEvents)

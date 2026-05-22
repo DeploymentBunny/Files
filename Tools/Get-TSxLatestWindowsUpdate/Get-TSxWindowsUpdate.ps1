@@ -1,8 +1,42 @@
+<#
+.SYNOPSIS
+Interactive tool to search and download Windows updates for offline image servicing.
+
+.DESCRIPTION
+Provides a Windows Forms UI that searches Microsoft Update Catalog, lets users select updates,
+and downloads selected files through helper scripts with support for category selection,
+WhatIf, and Force behavior.
+
+.PARAMETER Force
+When set, clears the current log file and forces overwrite behavior in downstream download calls.
+
+.PARAMETER LogPath
+Path to log file. Defaults to %TEMP%\Get-TSxLatestWindowsUpdate\Get-TSxWindowsUpdate.log.
+
+.EXAMPLE
+.\Get-TSxWindowsUpdate.ps1 -Verbose
+
+.NOTES
+FileName   : Get-TSxWindowsUpdate.ps1
+Version    : 1.2.2
+Author     : Mikael Nystrom
+Contact    : @mikael_nystrom
+Created    : 2026-05-22
+Updated    : 2026-05-22
+Twitter    : @mikael_nystrom
+Disclaimer : This script is provided "AS IS" with no warranties.
+
+.LINK
+https://www.deploymentbunny.com
+#>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter()]
+    [switch]$Force,
+
+    [Parameter()]
     [ValidateNotNullOrEmpty()]
-    [string]$LogPath = (Join-Path -Path $env:TEMP -ChildPath 'Get-TSxWindowsUpdates.log')
+    [string]$LogPath = (Join-Path -Path (Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate') -ChildPath 'Get-TSxWindowsUpdate.log')
 )
 
 Set-StrictMode -Version Latest
@@ -27,6 +61,10 @@ function Start-TSxLog {
 
     if (-not (Test-Path -Path $FilePath)) {
         $null = New-Item -Path $FilePath -ItemType File -Force
+    }
+
+    if ($Force) {
+        Clear-Content -Path $FilePath -Force
     }
 
     $script:ScriptLogFilePath = $FilePath
@@ -67,8 +105,65 @@ function Get-TSxDefaultArchitecture {
     }
 }
 
+function Invoke-TSxDownloadJob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DownloadScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [psobject]$SelectedUpdate,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DownloadPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+
+        [Parameter()]
+        [bool]$UseWhatIf = $false,
+
+        [Parameter()]
+        [bool]$UseForce = $false
+    )
+
+    $job = Start-Job -ScriptBlock {
+        param(
+            [string]$DownloadScriptPath,
+            [psobject]$SelectedUpdate,
+            [string]$DownloadPath,
+            [string]$LogPath,
+            [bool]$UseWhatIf,
+            [bool]$UseForce
+        )
+
+        $SelectedUpdate | & $DownloadScriptPath -Path $DownloadPath -LogPath $LogPath -WhatIf:$UseWhatIf -Force:$UseForce -Verbose 4>&1
+    } -ArgumentList $DownloadScriptPath, $SelectedUpdate, $DownloadPath, $LogPath, $UseWhatIf, $UseForce
+
+    try {
+        while ($job.State -eq 'Running' -or $job.State -eq 'NotStarted') {
+            [System.Windows.Forms.Application]::DoEvents()
+            [System.Threading.Thread]::Sleep(150)
+        }
+
+        if ($job.State -ne 'Completed') {
+            $reason = $job.ChildJobs[0].JobStateInfo.Reason
+            if ($reason) {
+                throw $reason
+            }
+
+            throw ('Download job finished with unexpected state: {0}' -f $job.State)
+        }
+
+        return @(Receive-Job -Job $job -ErrorAction Stop)
+    }
+    finally {
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $scriptRoot = Split-Path -Path $PSCommandPath -Parent
-$listScriptPath = Join-Path -Path $scriptRoot -ChildPath 'Get-TSxLatestWindowsUpdateList.ps1'
+$listScriptPath = Join-Path -Path $scriptRoot -ChildPath 'Get-TSxWindowsUpdateList.ps1'
 $downloadScriptPath = Join-Path -Path $scriptRoot -ChildPath 'Save-TSxWindowsUpdateFromCatalog.ps1'
 
 if (-not (Test-Path -Path $listScriptPath)) {
@@ -82,10 +177,11 @@ if (-not (Test-Path -Path $downloadScriptPath)) {
 $scriptName = Split-Path -Path $PSCommandPath -Leaf
 Start-TSxLog -FilePath $LogPath
 Write-TSxLog -Message ('{0} started' -f $scriptName)
+Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
 Write-TSxLog -Message ('Log path: {0}' -f $LogPath)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Get-TSxWindowsUpdates'
+$form.Text = 'Get-TSxWindowsUpdate'
 $form.StartPosition = 'CenterScreen'
 $form.Size = New-Object System.Drawing.Size(1180, 760)
 $form.MinimumSize = New-Object System.Drawing.Size(1000, 680)
@@ -127,6 +223,54 @@ $buttonClearSelection.Location = New-Object System.Drawing.Point(882, 10)
 $buttonClearSelection.Size = New-Object System.Drawing.Size(90, 27)
 $buttonClearSelection.Text = 'Clear'
 
+$checkForce = New-Object System.Windows.Forms.CheckBox
+$checkForce.Location = New-Object System.Drawing.Point(980, 14)
+$checkForce.Size = New-Object System.Drawing.Size(170, 20)
+$checkForce.Text = 'Force overwrite existing'
+$checkForce.Checked = $Force.IsPresent
+
+$checkIncludeCumulative = New-Object System.Windows.Forms.CheckBox
+$checkIncludeCumulative.Location = New-Object System.Drawing.Point(12, 70)
+$checkIncludeCumulative.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeCumulative.Text = 'Include LCU'
+$checkIncludeCumulative.Checked = $true
+
+$checkIncludeDotNet = New-Object System.Windows.Forms.CheckBox
+$checkIncludeDotNet.Location = New-Object System.Drawing.Point(148, 70)
+$checkIncludeDotNet.Size = New-Object System.Drawing.Size(150, 20)
+$checkIncludeDotNet.Text = 'Include .NET CU'
+$checkIncludeDotNet.Checked = $true
+
+$checkIncludeSSU = New-Object System.Windows.Forms.CheckBox
+$checkIncludeSSU.Location = New-Object System.Drawing.Point(304, 70)
+$checkIncludeSSU.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludeSSU.Text = 'Include SSU'
+$checkIncludeSSU.Checked = $true
+
+$checkIncludeDefender = New-Object System.Windows.Forms.CheckBox
+$checkIncludeDefender.Location = New-Object System.Drawing.Point(430, 70)
+$checkIncludeDefender.Size = New-Object System.Drawing.Size(150, 20)
+$checkIncludeDefender.Text = 'Include Defender'
+$checkIncludeDefender.Checked = $false
+
+$checkIncludeEdge = New-Object System.Windows.Forms.CheckBox
+$checkIncludeEdge.Location = New-Object System.Drawing.Point(586, 70)
+$checkIncludeEdge.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludeEdge.Text = 'Include Edge'
+$checkIncludeEdge.Checked = $false
+
+$checkIncludePreview = New-Object System.Windows.Forms.CheckBox
+$checkIncludePreview.Location = New-Object System.Drawing.Point(712, 70)
+$checkIncludePreview.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludePreview.Text = 'Include Preview'
+$checkIncludePreview.Checked = $false
+
+$checkIncludeInsider = New-Object System.Windows.Forms.CheckBox
+$checkIncludeInsider.Location = New-Object System.Drawing.Point(838, 70)
+$checkIncludeInsider.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludeInsider.Text = 'Include Insider'
+$checkIncludeInsider.Checked = $false
+
 $labelPath = New-Object System.Windows.Forms.Label
 $labelPath.Location = New-Object System.Drawing.Point(12, 48)
 $labelPath.Size = New-Object System.Drawing.Size(120, 20)
@@ -154,7 +298,7 @@ $buttonDownload.Size = New-Object System.Drawing.Size(140, 27)
 $buttonDownload.Text = 'Download Selected'
 
 $progressDownloads = New-Object System.Windows.Forms.ProgressBar
-$progressDownloads.Location = New-Object System.Drawing.Point(12, 74)
+$progressDownloads.Location = New-Object System.Drawing.Point(12, 96)
 $progressDownloads.Size = New-Object System.Drawing.Size(1138, 18)
 $progressDownloads.Anchor = 'Top,Left,Right'
 $progressDownloads.Style = 'Continuous'
@@ -163,8 +307,8 @@ $progressDownloads.Maximum = 100
 $progressDownloads.Value = 0
 
 $splitMain = New-Object System.Windows.Forms.SplitContainer
-$splitMain.Location = New-Object System.Drawing.Point(12, 98)
-$splitMain.Size = New-Object System.Drawing.Size(1138, 540)
+$splitMain.Location = New-Object System.Drawing.Point(12, 120)
+$splitMain.Size = New-Object System.Drawing.Size(1138, 518)
 $splitMain.Anchor = 'Top,Bottom,Left,Right'
 $splitMain.Orientation = 'Horizontal'
 $splitMain.SplitterDistance = 390
@@ -214,6 +358,12 @@ $colClassification.HeaderText = 'Classification'
 $colClassification.DataPropertyName = 'Classification'
 $colClassification.Width = 110
 
+$colUpdateType = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+$colUpdateType.Name = 'UpdateType'
+$colUpdateType.HeaderText = 'Type'
+$colUpdateType.DataPropertyName = 'UpdateType'
+$colUpdateType.Width = 95
+
 $colUpdateId = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
 $colUpdateId.Name = 'UpdateId'
 $colUpdateId.HeaderText = 'UpdateId'
@@ -232,6 +382,7 @@ $colArchitecture.Width = 60
 [void]$gridUpdates.Columns.Add($colTitle)
 [void]$gridUpdates.Columns.Add($colSize)
 [void]$gridUpdates.Columns.Add($colClassification)
+[void]$gridUpdates.Columns.Add($colUpdateType)
 [void]$gridUpdates.Columns.Add($colUpdateId)
 [void]$gridUpdates.Columns.Add($colArchitecture)
 
@@ -258,11 +409,19 @@ $statusLabel.Text = 'Ready'
 [void]$form.Controls.Add($buttonSearch)
 [void]$form.Controls.Add($buttonSelectAll)
 [void]$form.Controls.Add($buttonClearSelection)
+[void]$form.Controls.Add($checkForce)
 [void]$form.Controls.Add($labelPath)
 [void]$form.Controls.Add($textPath)
 [void]$form.Controls.Add($buttonBrowse)
 [void]$form.Controls.Add($checkWhatIf)
 [void]$form.Controls.Add($buttonDownload)
+[void]$form.Controls.Add($checkIncludeCumulative)
+[void]$form.Controls.Add($checkIncludeDotNet)
+[void]$form.Controls.Add($checkIncludeSSU)
+[void]$form.Controls.Add($checkIncludeDefender)
+[void]$form.Controls.Add($checkIncludeEdge)
+[void]$form.Controls.Add($checkIncludePreview)
+[void]$form.Controls.Add($checkIncludeInsider)
 [void]$form.Controls.Add($progressDownloads)
 [void]$form.Controls.Add($splitMain)
 [void]$form.Controls.Add($statusBar)
@@ -274,6 +433,7 @@ $bindingTable = New-Object System.Data.DataTable
 [void]$bindingTable.Columns.Add('Title', [string])
 [void]$bindingTable.Columns.Add('Size', [string])
 [void]$bindingTable.Columns.Add('Classification', [string])
+[void]$bindingTable.Columns.Add('UpdateType', [string])
 [void]$bindingTable.Columns.Add('UpdateId', [string])
 [void]$bindingTable.Columns.Add('Architecture', [string])
 
@@ -302,11 +462,16 @@ $buttonSearch.Add_Click({
                 return
             }
 
+            if (-not ($checkIncludeCumulative.Checked -or $checkIncludeDotNet.Checked -or $checkIncludeSSU.Checked -or $checkIncludeDefender.Checked -or $checkIncludeEdge.Checked)) {
+                [System.Windows.Forms.MessageBox]::Show('Select at least one update category.', 'Validation', 'OK', 'Warning') | Out-Null
+                return
+            }
+
             $statusLabel.Text = 'Searching updates...'
             [System.Windows.Forms.Application]::DoEvents()
             Write-TSxLog -Message ('Searching updates for {0} ({1})' -f $osText, $architecture)
 
-            $searchOutput = @(& $listScriptPath -OperatingSystem $osText -Architecture $architecture -LogPath $LogPath -Verbose 4>&1)
+            $searchOutput = @(& $listScriptPath -OperatingSystem $osText -Architecture $architecture -LogPath $LogPath -Force:$checkForce.Checked -IncludeCumulative:$checkIncludeCumulative.Checked -IncludeDotNet:$checkIncludeDotNet.Checked -IncludeSSU:$checkIncludeSSU.Checked -IncludeDefender:$checkIncludeDefender.Checked -IncludeEdge:$checkIncludeEdge.Checked -IncludePreview:$checkIncludePreview.Checked -IncludeInsider:$checkIncludeInsider.Checked -Verbose 4>&1)
             $updates = @()
             foreach ($outputItem in $searchOutput) {
                 if ($outputItem -is [System.Management.Automation.VerboseRecord]) {
@@ -332,6 +497,7 @@ $buttonSearch.Add_Click({
                 $row['Title'] = [string]$update.Title
                 $row['Size'] = [string]$update.Size
                 $row['Classification'] = [string]$update.Classification
+                $row['UpdateType'] = if ($update.PSObject.Properties['UpdateType']) { [string]$update.UpdateType } else { '' }
                 $row['UpdateId'] = [string]$update.UpdateId
                 $row['Architecture'] = [string]$update.Architecture
                 [void]$bindingTable.Rows.Add($row)
@@ -408,8 +574,11 @@ $buttonDownload.Add_Click({
                 foreach ($selectedUpdate in $selectedUpdates) {
                     $currentIndex++
                     $statusLabel.Text = ('Downloading update {0} of {1}...' -f $currentIndex, $selectedUpdateCount)
+                    $progressDownloads.Style = 'Marquee'
+                    $progressDownloads.MarqueeAnimationSpeed = 25
+                    [System.Windows.Forms.Application]::DoEvents()
 
-                    $singleDownloadOutput = @($selectedUpdate | & $downloadScriptPath -Path $downloadPath -LogPath $LogPath -WhatIf:$checkWhatIf.Checked -Verbose 4>&1)
+                    $singleDownloadOutput = @(Invoke-TSxDownloadJob -DownloadScriptPath $downloadScriptPath -SelectedUpdate $selectedUpdate -DownloadPath $downloadPath -LogPath $LogPath -UseWhatIf $checkWhatIf.Checked -UseForce $checkForce.Checked)
                     foreach ($outputItem in $singleDownloadOutput) {
                         if ($outputItem -is [System.Management.Automation.VerboseRecord]) {
                             Write-TSxLog -Message $outputItem.Message
@@ -425,6 +594,8 @@ $buttonDownload.Add_Click({
                         }
                     }
 
+                    $progressDownloads.Style = 'Continuous'
+                    $progressDownloads.MarqueeAnimationSpeed = 0
                     $progressDownloads.Value = $currentIndex
                     [System.Windows.Forms.Application]::DoEvents()
                 }
@@ -440,6 +611,8 @@ $buttonDownload.Add_Click({
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Download Failed', 'OK', 'Error') | Out-Null
         }
         finally {
+            $progressDownloads.Style = 'Continuous'
+            $progressDownloads.MarqueeAnimationSpeed = 0
             if ($progressDownloads.Maximum -gt 0 -and $progressDownloads.Value -ge $progressDownloads.Maximum) {
                 $statusLabel.Text = $statusLabel.Text
             }
