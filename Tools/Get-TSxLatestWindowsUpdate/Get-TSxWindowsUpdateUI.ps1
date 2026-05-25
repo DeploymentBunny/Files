@@ -15,7 +15,7 @@
 
 .NOTES
     FileName:    Get-TSxWindowsUpdateUI.ps1
-    Version:     1.2.8
+    Version:     1.2.16
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
@@ -217,8 +217,8 @@ $form.BackColor = [System.Drawing.Color]::White
 $logoImage = Get-TSxDeploymentBunnyLogoImage
 if ($logoImage) {
     $pictureBox = New-Object System.Windows.Forms.PictureBox
-    $pictureBox.Location = New-Object System.Drawing.Point(1018, 4)
-    $pictureBox.Size = New-Object System.Drawing.Size(150, 70)
+    $pictureBox.Location = New-Object System.Drawing.Point(980, 2)
+    $pictureBox.Size = New-Object System.Drawing.Size(188, 112)
     $pictureBox.Image = $logoImage
     $pictureBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
     $pictureBox.BackColor = [System.Drawing.Color]::White
@@ -228,26 +228,26 @@ if ($logoImage) {
 
 $labelOS = New-Object System.Windows.Forms.Label
 $labelOS.Location = New-Object System.Drawing.Point(12, 16)
-$labelOS.Size = New-Object System.Drawing.Size(120, 20)
+$labelOS.Size = New-Object System.Drawing.Size(150, 20)
 $labelOS.Text = 'Operating System'
 $labelOS.Font = $fontMain
 $labelOS.BackColor = [System.Drawing.Color]::White
 
 $textOS = New-Object System.Windows.Forms.TextBox
-$textOS.Location = New-Object System.Drawing.Point(138, 12)
-$textOS.Size = New-Object System.Drawing.Size(300, 23)
+$textOS.Location = New-Object System.Drawing.Point(166, 12)
+$textOS.Size = New-Object System.Drawing.Size(320, 23)
 $textOS.Text = 'Windows 11 24H2'
 $textOS.Font = $fontMain
 
 $labelArchitecture = New-Object System.Windows.Forms.Label
-$labelArchitecture.Location = New-Object System.Drawing.Point(446, 16)
+$labelArchitecture.Location = New-Object System.Drawing.Point(494, 16)
 $labelArchitecture.Size = New-Object System.Drawing.Size(80, 20)
 $labelArchitecture.Text = 'Architecture'
 $labelArchitecture.Font = $fontMain
 $labelArchitecture.BackColor = [System.Drawing.Color]::White
 
 $comboArchitecture = New-Object System.Windows.Forms.ComboBox
-$comboArchitecture.Location = New-Object System.Drawing.Point(532, 12)
+$comboArchitecture.Location = New-Object System.Drawing.Point(580, 12)
 $comboArchitecture.Size = New-Object System.Drawing.Size(110, 23)
 $comboArchitecture.DropDownStyle = 'DropDownList'
 $comboArchitecture.Font = $fontMain
@@ -255,7 +255,7 @@ $comboArchitecture.Font = $fontMain
 $comboArchitecture.SelectedItem = Get-TSxDefaultArchitecture
 
 $buttonSearch = New-Object System.Windows.Forms.Button
-$buttonSearch.Location = New-Object System.Drawing.Point(654, 10)
+$buttonSearch.Location = New-Object System.Drawing.Point(702, 10)
 $buttonSearch.Size = New-Object System.Drawing.Size(90, 27)
 $buttonSearch.Text = 'Search'
 $buttonSearch.Font = $fontMain
@@ -263,7 +263,7 @@ $buttonSearch.BackColor = $colorPrimaryButton
 $buttonSearch.ForeColor = $colorButtonText
 
 $buttonSelectAll = New-Object System.Windows.Forms.Button
-$buttonSelectAll.Location = New-Object System.Drawing.Point(748, 10)
+$buttonSelectAll.Location = New-Object System.Drawing.Point(796, 10)
 $buttonSelectAll.Size = New-Object System.Drawing.Size(90, 27)
 $buttonSelectAll.Text = 'Select All'
 $buttonSelectAll.Font = $fontMain
@@ -271,7 +271,7 @@ $buttonSelectAll.BackColor = $colorSecondaryButton
 $buttonSelectAll.ForeColor = $colorButtonText
 
 $buttonClearSelection = New-Object System.Windows.Forms.Button
-$buttonClearSelection.Location = New-Object System.Drawing.Point(842, 10)
+$buttonClearSelection.Location = New-Object System.Drawing.Point(890, 10)
 $buttonClearSelection.Size = New-Object System.Drawing.Size(90, 27)
 $buttonClearSelection.Text = 'Clear'
 $buttonClearSelection.Font = $fontMain
@@ -279,55 +279,55 @@ $buttonClearSelection.BackColor = $colorSecondaryButton
 $buttonClearSelection.ForeColor = $colorButtonText
 
 $checkForce = New-Object System.Windows.Forms.CheckBox
-$checkForce.Location = New-Object System.Drawing.Point(886, 70)
-$checkForce.Size = New-Object System.Drawing.Size(250, 20)
-$checkForce.Text = 'Force overwrite existing'
+$checkForce.Location = New-Object System.Drawing.Point(414, 92)
+$checkForce.Size = New-Object System.Drawing.Size(130, 20)
+$checkForce.Text = 'Force overwrite'
 $checkForce.Checked = $Force.IsPresent
 $checkForce.Font = $fontMain
 $checkForce.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeCumulative = New-Object System.Windows.Forms.CheckBox
 $checkIncludeCumulative.Location = New-Object System.Drawing.Point(12, 70)
-$checkIncludeCumulative.Size = New-Object System.Drawing.Size(112, 20)
+$checkIncludeCumulative.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludeCumulative.Text = 'Include LCU'
 $checkIncludeCumulative.Checked = $true
 $checkIncludeCumulative.Font = $fontMain
 $checkIncludeCumulative.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDotNet = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDotNet.Location = New-Object System.Drawing.Point(126, 70)
-$checkIncludeDotNet.Size = New-Object System.Drawing.Size(136, 20)
+$checkIncludeDotNet.Location = New-Object System.Drawing.Point(146, 70)
+$checkIncludeDotNet.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludeDotNet.Text = 'Include .NET CU'
 $checkIncludeDotNet.Checked = $true
 $checkIncludeDotNet.Font = $fontMain
 $checkIncludeDotNet.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeSSU = New-Object System.Windows.Forms.CheckBox
-$checkIncludeSSU.Location = New-Object System.Drawing.Point(264, 70)
-$checkIncludeSSU.Size = New-Object System.Drawing.Size(112, 20)
+$checkIncludeSSU.Location = New-Object System.Drawing.Point(280, 70)
+$checkIncludeSSU.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludeSSU.Text = 'Include SSU'
 $checkIncludeSSU.Checked = $true
 $checkIncludeSSU.Font = $fontMain
 $checkIncludeSSU.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDefender = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDefender.Location = New-Object System.Drawing.Point(378, 70)
-$checkIncludeDefender.Size = New-Object System.Drawing.Size(142, 20)
+$checkIncludeDefender.Location = New-Object System.Drawing.Point(414, 70)
+$checkIncludeDefender.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludeDefender.Text = 'Include Defender'
 $checkIncludeDefender.Checked = $false
 $checkIncludeDefender.Font = $fontMain
 $checkIncludeDefender.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeEdge = New-Object System.Windows.Forms.CheckBox
-$checkIncludeEdge.Location = New-Object System.Drawing.Point(522, 70)
-$checkIncludeEdge.Size = New-Object System.Drawing.Size(110, 20)
+$checkIncludeEdge.Location = New-Object System.Drawing.Point(12, 92)
+$checkIncludeEdge.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludeEdge.Text = 'Include Edge'
 $checkIncludeEdge.Checked = $false
 $checkIncludeEdge.Font = $fontMain
 $checkIncludeEdge.BackColor = [System.Drawing.Color]::White
 
 $checkIncludePreview = New-Object System.Windows.Forms.CheckBox
-$checkIncludePreview.Location = New-Object System.Drawing.Point(634, 70)
+$checkIncludePreview.Location = New-Object System.Drawing.Point(146, 92)
 $checkIncludePreview.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludePreview.Text = 'Include Preview'
 $checkIncludePreview.Checked = $false
@@ -335,8 +335,8 @@ $checkIncludePreview.Font = $fontMain
 $checkIncludePreview.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeInsider = New-Object System.Windows.Forms.CheckBox
-$checkIncludeInsider.Location = New-Object System.Drawing.Point(766, 70)
-$checkIncludeInsider.Size = New-Object System.Drawing.Size(118, 20)
+$checkIncludeInsider.Location = New-Object System.Drawing.Point(280, 92)
+$checkIncludeInsider.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludeInsider.Text = 'Include Insider'
 $checkIncludeInsider.Checked = $false
 $checkIncludeInsider.Font = $fontMain
@@ -344,19 +344,19 @@ $checkIncludeInsider.BackColor = [System.Drawing.Color]::White
 
 $labelPath = New-Object System.Windows.Forms.Label
 $labelPath.Location = New-Object System.Drawing.Point(12, 48)
-$labelPath.Size = New-Object System.Drawing.Size(120, 20)
+$labelPath.Size = New-Object System.Drawing.Size(150, 20)
 $labelPath.Text = 'Download Path'
 $labelPath.Font = $fontMain
 $labelPath.BackColor = [System.Drawing.Color]::White
 
 $textPath = New-Object System.Windows.Forms.TextBox
-$textPath.Location = New-Object System.Drawing.Point(138, 44)
-$textPath.Size = New-Object System.Drawing.Size(610, 23)
+$textPath.Location = New-Object System.Drawing.Point(166, 44)
+$textPath.Size = New-Object System.Drawing.Size(320, 23)
 $textPath.Text = (Join-Path -Path $env:TEMP -ChildPath 'TSxCatalogDownloads')
 $textPath.Font = $fontMain
 
 $buttonBrowse = New-Object System.Windows.Forms.Button
-$buttonBrowse.Location = New-Object System.Drawing.Point(754, 42)
+$buttonBrowse.Location = New-Object System.Drawing.Point(796, 42)
 $buttonBrowse.Size = New-Object System.Drawing.Size(90, 27)
 $buttonBrowse.Text = 'Browse...'
 $buttonBrowse.Font = $fontMain
@@ -364,15 +364,15 @@ $buttonBrowse.BackColor = $colorSecondaryButton
 $buttonBrowse.ForeColor = $colorButtonText
 
 $buttonDownload = New-Object System.Windows.Forms.Button
-$buttonDownload.Location = New-Object System.Drawing.Point(848, 42)
-$buttonDownload.Size = New-Object System.Drawing.Size(160, 27)
-$buttonDownload.Text = 'Download Selected'
+$buttonDownload.Location = New-Object System.Drawing.Point(890, 42)
+$buttonDownload.Size = New-Object System.Drawing.Size(90, 27)
+$buttonDownload.Text = 'Download'
 $buttonDownload.Font = $fontMain
 $buttonDownload.BackColor = $colorPrimaryButton
 $buttonDownload.ForeColor = $colorButtonText
 
 $progressDownloads = New-Object System.Windows.Forms.ProgressBar
-$progressDownloads.Location = New-Object System.Drawing.Point(12, 96)
+$progressDownloads.Location = New-Object System.Drawing.Point(12, 118)
 $progressDownloads.Size = New-Object System.Drawing.Size(1138, 18)
 $progressDownloads.Anchor = 'Top,Left,Right'
 $progressDownloads.Style = 'Continuous'
@@ -381,11 +381,11 @@ $progressDownloads.Maximum = 100
 $progressDownloads.Value = 0
 
 $splitMain = New-Object System.Windows.Forms.SplitContainer
-$splitMain.Location = New-Object System.Drawing.Point(12, 120)
-$splitMain.Size = New-Object System.Drawing.Size(1138, 518)
+$splitMain.Location = New-Object System.Drawing.Point(12, 142)
+$splitMain.Size = New-Object System.Drawing.Size(1138, 496)
 $splitMain.Anchor = 'Top,Bottom,Left,Right'
 $splitMain.Orientation = 'Horizontal'
-$splitMain.SplitterDistance = 390
+$splitMain.SplitterDistance = 374
 
 $gridUpdates = New-Object System.Windows.Forms.DataGridView
 $gridUpdates.Dock = 'Fill'
@@ -420,7 +420,7 @@ $colTitle = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
 $colTitle.Name = 'Title'
 $colTitle.HeaderText = 'Title'
 $colTitle.DataPropertyName = 'Title'
-$colTitle.Width = 500
+$colTitle.Width = 450
 
 $colSize = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
 $colSize.Name = 'Size'
@@ -440,12 +440,6 @@ $colUpdateType.HeaderText = 'Type'
 $colUpdateType.DataPropertyName = 'UpdateType'
 $colUpdateType.Width = 95
 
-$colUpdateId = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
-$colUpdateId.Name = 'UpdateId'
-$colUpdateId.HeaderText = 'UpdateId'
-$colUpdateId.DataPropertyName = 'UpdateId'
-$colUpdateId.Width = 170
-
 $colArchitecture = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
 $colArchitecture.Name = 'Architecture'
 $colArchitecture.HeaderText = 'Arch'
@@ -459,7 +453,6 @@ $colArchitecture.Width = 60
 [void]$gridUpdates.Columns.Add($colSize)
 [void]$gridUpdates.Columns.Add($colClassification)
 [void]$gridUpdates.Columns.Add($colUpdateType)
-[void]$gridUpdates.Columns.Add($colUpdateId)
 [void]$gridUpdates.Columns.Add($colArchitecture)
 
 $textOutput = New-Object System.Windows.Forms.RichTextBox
