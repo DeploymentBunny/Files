@@ -1,65 +1,69 @@
 <#
 .SYNOPSIS
-Gets Windows update entries from Microsoft Update Catalog for offline image servicing.
+	Queries Microsoft Update Catalog for Windows update entries used by the UI and download pipeline.
 
 .DESCRIPTION
-Searches Microsoft Update Catalog for one or more update categories (LCU, .NET CU, SSU, Defender, Edge)
-matching operating system and architecture, then returns normalized objects for automation and download workflows.
+	Searches Microsoft Update Catalog for one or more update categories (LCU, .NET CU, SSU,
+	Defender, Edge) matching the requested operating system and architecture, then returns
+	normalized objects for automation and download workflows.
 
 .PARAMETER OperatingSystem
-Operating system search text, for example "Windows 11 24H2".
+	Operating system search text, for example "Windows 11 24H2".
 
 .PARAMETER Architecture
-Target architecture. Defaults to the local processor architecture when not specified.
+	Target architecture. Defaults to the local processor architecture when not specified.
 
 .PARAMETER LatestOnly
-Returns only the highest ranked candidate.
+	Returns only the highest ranked candidate.
 
 .PARAMETER IncludeCumulative
-Include latest cumulative updates (LCU).
+	Include latest cumulative updates (LCU).
 
 .PARAMETER IncludeDotNet
-Include cumulative updates for .NET Framework.
+	Include cumulative updates for .NET Framework.
 
 .PARAMETER IncludeSSU
-Include servicing stack updates when listed separately.
+	Include servicing stack updates when listed separately.
 
 .PARAMETER IncludeDefender
-Include Microsoft Defender related updates.
+	Include Microsoft Defender related updates.
 
 .PARAMETER IncludeEdge
-Include Microsoft Edge related updates.
+	Include Microsoft Edge related updates.
 
 .PARAMETER IncludePreview
-Include preview updates. Default behavior excludes previews.
+	Include preview updates. Default behavior excludes previews.
 
 .PARAMETER IncludeInsider
-Include Windows Insider pre-release updates. Default behavior excludes Insider updates.
+	Include Windows Insider pre-release updates. Default behavior excludes Insider updates.
 
 .PARAMETER Force
-Recreates log file content for the current execution.
-
-.PARAMETER LogPath
-Path to log file. Defaults to %TEMP%\Get-TSxLatestWindowsUpdate\Get-TSxWindowsUpdateList.log.
+	Recreates log file content for the current execution.
 
 .EXAMPLE
-.\Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -Architecture x64 -LatestOnly -Verbose
+	.\Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -Architecture x64 -LatestOnly -Verbose
 
 .EXAMPLE
-.\Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -Architecture x64 -IncludeCumulative -IncludeDotNet -IncludeSSU -LatestOnly -Verbose
+	.\Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -Architecture x64 -IncludeCumulative -IncludeDotNet -IncludeSSU -LatestOnly -Verbose
 
 .NOTES
-FileName   : Get-TSxWindowsUpdateList.ps1
-Version    : 1.2.2
-Author     : Mikael Nystrom
-Contact    : @mikael_nystrom
-Created    : 2026-05-22
-Updated    : 2026-05-22
-Twitter    : @mikael_nystrom
-Disclaimer : This script is provided "AS IS" with no warranties.
+	FileName:    Get-TSxWindowsUpdateList.ps1
+	Version:     1.2.4
+	Author:      Mikael Nystrom
+	Contact:     @mikael_nystrom
+	Created:     2026-05-22
+	Updated:     2026-05-25
+	Twitter:     @mikael_nystrom
+
+	Disclaimer:
+	This script is provided "AS IS" with no warranties, confers no rights and
+	is not supported by the author.
 
 .LINK
-https://www.deploymentbunny.com
+	https://www.deploymentbunny.com
+
+.FUNCTIONALITY
+	Returns normalized catalog metadata for Windows updates and supports WhatIf-aware catalog searches.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -75,13 +79,13 @@ param(
 	[switch]$LatestOnly,
 
 	[Parameter()]
-	[switch]$IncludeCumulative = $true,
+	[switch]$IncludeCumulative,
 
 	[Parameter()]
-	[switch]$IncludeDotNet = $true,
+	[switch]$IncludeDotNet,
 
 	[Parameter()]
-	[switch]$IncludeSSU = $true,
+	[switch]$IncludeSSU,
 
 	[Parameter()]
 	[switch]$IncludeDefender,
@@ -96,312 +100,27 @@ param(
 	[switch]$IncludeInsider,
 
 	[Parameter()]
-	[switch]$Force,
-
-	[Parameter()]
-	[ValidateNotNullOrEmpty()]
-	[string]$LogPath = (Join-Path -Path (Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate') -ChildPath 'Get-TSxWindowsUpdateList.log')
+	[switch]$Force
 )
+
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Start-TSxLog {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$FilePath
-	)
+$script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate'
+$script:LogFilePath = Join-Path -Path $script:LogRootPath -ChildPath ('{0}.log' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
 
-	$parentPath = Split-Path -Path $FilePath -Parent
-	if (-not (Test-Path -Path $parentPath)) {
-		$null = New-Item -Path $parentPath -ItemType Directory -Force
-	}
-
-	if (-not (Test-Path -Path $FilePath)) {
-		$null = New-Item -Path $FilePath -ItemType File -Force
-	}
-
-	if ($Force) {
-		Clear-Content -Path $FilePath -Force
-	}
-
-	$script:ScriptLogFilePath = $FilePath
-}
-
-function Write-TSxLog {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Message,
-
-		[Parameter()]
-		[ValidateSet('INFO', 'WARN', 'ERROR')]
-		[string]$Level = 'INFO'
-	)
-
-	$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-	$entry = '[{0}] [{1}] {2}' -f $timestamp, $Level, $Message
-	Add-Content -Path $script:ScriptLogFilePath -Value $entry
-
-	switch ($Level) {
-		'WARN' { Write-Verbose $Message }
-		'ERROR' { Write-Verbose $Message }
-		default { Write-Verbose $Message }
-	}
-}
-
-function Get-TSxDefaultArchitecture {
-	[CmdletBinding()]
-	param()
-
-	switch -Regex ($env:PROCESSOR_ARCHITECTURE) {
-		'ARM64' { return 'arm64' }
-		'64' { return 'x64' }
-		default { return 'x86' }
-	}
-}
-
-function ConvertFrom-TSxHtml {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Text
-	)
-
-	return ([System.Net.WebUtility]::HtmlDecode(($Text -replace '<[^>]+>', ' ' -replace '\s+', ' ').Trim()))
-}
-
-function ConvertTo-TSxNormalizedText {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Text
-	)
-
-	$normalized = $Text.ToLowerInvariant()
-	$normalized = $normalized -replace '[,()]', ' '
-	$normalized = $normalized -replace '\bversion\b', ' '
-	$normalized = $normalized -replace '\s+', ' '
-	return $normalized.Trim()
-}
-
-function Test-TSxOperatingSystemMatch {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Title,
-
-		[Parameter()]
-		[string]$Product,
-
-		[Parameter(Mandatory = $true)]
-		[string]$OperatingSystem
-	)
-
-	$normalizedTitle = ConvertTo-TSxNormalizedText -Text $Title
-	$normalizedProduct = if ([string]::IsNullOrWhiteSpace($Product)) { '' } else { ConvertTo-TSxNormalizedText -Text $Product }
-	$normalizedOperatingSystem = ConvertTo-TSxNormalizedText -Text $OperatingSystem
-	$matchText = ('{0} {1}' -f $normalizedTitle, $normalizedProduct).Trim()
-
-	# Avoid cross-family matches (client vs server).
-	$requiresServer = $normalizedOperatingSystem -match '\bserver\b'
-	$isServerEntry = $matchText -match '\bserver\b'
-	if ($requiresServer -and -not $isServerEntry) {
-		return $false
-	}
-
-	if (-not $requiresServer -and $isServerEntry) {
-		return $false
-	}
-
-	# Enforce explicit client family phrases to avoid date-token false positives like "2025-11".
-	if ($normalizedOperatingSystem -match '\bwindows 11\b' -and $matchText -notmatch '\bwindows 11\b') {
-		return $false
-	}
-
-	if ($normalizedOperatingSystem -match '\bwindows 10\b' -and $matchText -notmatch '\bwindows 10\b') {
-		return $false
-	}
-
-	$tokens = $normalizedOperatingSystem.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
-	foreach ($token in $tokens) {
-		if ($token -eq 'windows') {
-			continue
-		}
-
-		# Ignore 1-2 digit numeric tokens because dates in titles (e.g. 2025-11) create false positives.
-		if ($token -match '^\d{1,2}$') {
-			continue
-		}
-
-		if ($matchText -notmatch ('\b{0}\b' -f [regex]::Escape($token))) {
-			return $false
-		}
-	}
-
-	return $true
-}
-
-function Get-TSxCategoryDefinition {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Name,
-
-		[Parameter(Mandatory = $true)]
-		[string]$Query,
-
-		[Parameter(Mandatory = $true)]
-		[string[]]$IncludePatterns,
-
-		[Parameter()]
-		[string[]]$ExcludePatterns = @()
-	)
-
-	return [pscustomobject]@{
-		Name            = $Name
-		Query           = $Query
-		IncludePatterns = $IncludePatterns
-		ExcludePatterns = $ExcludePatterns
-	}
-}
-
-function Test-TSxTitlePatternMatch {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Title,
-
-		[Parameter(Mandatory = $true)]
-		[string[]]$IncludePatterns,
-
-		[Parameter()]
-		[string[]]$ExcludePatterns = @()
-	)
-
-	$matchesInclude = $false
-	foreach ($includePattern in $IncludePatterns) {
-		if ($Title -match $includePattern) {
-			$matchesInclude = $true
-			break
-		}
-	}
-
-	if (-not $matchesInclude) {
-		return $false
-	}
-
-	foreach ($excludePattern in $ExcludePatterns) {
-		if ($Title -match $excludePattern) {
-			return $false
-		}
-	}
-
-	return $true
-}
-
-function Get-TSxCatalogSearchResults {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[string]$Query
-	)
-
-	$searchUri = 'https://www.catalog.update.microsoft.com/Search.aspx?q={0}' -f [uri]::EscapeDataString($Query)
-	Write-TSxLog -Message ('Searching Windows Update Catalog: {0}' -f $searchUri)
-	if (-not $PSCmdlet.ShouldProcess($searchUri, 'Query Windows Update Catalog')) {
-		Write-TSxLog -Level 'WARN' -Message 'WhatIf: Catalog query skipped by ShouldProcess.'
-		return @()
-	}
-	$response = Invoke-WebRequest -UseBasicParsing -Uri $searchUri
-	$rowPattern = [regex]::new('<tr id="(?<UpdateId>[0-9a-f-]+)_R\d+"[^>]*>(?<RowHtml>.*?)</tr>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
-	$resultRowMatch = $rowPattern.Match($response.Content)
-
-	while ($resultRowMatch.Success) {
-		$rowHtml = $resultRowMatch.Groups['RowHtml'].Value
-		$titleMatch = [regex]::Match($rowHtml, '<a id=''.*?_link''[^>]*>(?<Title>.*?)</a>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
-		$productMatch = [regex]::Match($rowHtml, '_C2_R\d+">\s*(?<Product>.*?)\s*</td>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
-		$classificationMatch = [regex]::Match($rowHtml, '_C3_R\d+">\s*(?<Classification>.*?)\s*</td>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
-		$lastUpdatedMatch = [regex]::Match($rowHtml, '_C4_R\d+">\s*(?<LastUpdated>.*?)\s*</td>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
-		$sizeMatch = [regex]::Match($rowHtml, '<span id=".*?_size">\s*(?<Size>.*?)\s*</span>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
-
-		if (-not $titleMatch.Success) {
-			continue
-		}
-
-		$title = ConvertFrom-TSxHtml -Text $titleMatch.Groups['Title'].Value
-		$lastUpdated = $null
-		if ($lastUpdatedMatch.Success) {
-			$lastUpdated = [datetime]::Parse((ConvertFrom-TSxHtml -Text $lastUpdatedMatch.Groups['LastUpdated'].Value), [System.Globalization.CultureInfo]::InvariantCulture)
-		}
-
-		$build = [version]'0.0'
-		$buildMatch = [regex]::Match($title, '\((?<Build>\d+(?:\.\d+)+)\)\s*$')
-		if ($buildMatch.Success) {
-			$build = [version]$buildMatch.Groups['Build'].Value
-		}
-
-		[pscustomobject]@{
-			UpdateId       = $resultRowMatch.Groups['UpdateId'].Value
-			Title          = $title
-			Product        = if ($productMatch.Success) { ConvertFrom-TSxHtml -Text $productMatch.Groups['Product'].Value } else { '' }
-			Classification = if ($classificationMatch.Success) { ConvertFrom-TSxHtml -Text $classificationMatch.Groups['Classification'].Value } else { '' }
-			LastUpdated    = $lastUpdated
-			Size           = if ($sizeMatch.Success) { ConvertFrom-TSxHtml -Text $sizeMatch.Groups['Size'].Value } else { '' }
-			Build          = $build
-		}
-
-		$resultRowMatch = $resultRowMatch.NextMatch()
-	}
-}
-
-function ConvertTo-TSxUpdateObject {
-	[CmdletBinding()]
-	param(
-		[Parameter(Mandatory = $true)]
-		[pscustomobject]$Update,
-
-		[Parameter(Mandatory = $true)]
-		[string]$OperatingSystem,
-
-		[Parameter(Mandatory = $true)]
-		[string]$Architecture,
-
-		[Parameter(Mandatory = $true)]
-		[string]$SearchQuery,
-
-		[Parameter(Mandatory = $true)]
-		[string]$UpdateType,
-
-		[Parameter(Mandatory = $true)]
-		[string]$LogPath
-	)
-
-	$kbMatch = [regex]::Match($Update.Title, '(KB\d+)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-	$kb = if ($kbMatch.Success) { $kbMatch.Groups[1].Value.ToUpperInvariant() } else { $null }
-
-	[pscustomobject]@{
-		PSTypeName      = 'TSx.WindowsUpdate.CatalogEntry'
-		OperatingSystem = $OperatingSystem
-		Architecture    = $Architecture
-		SearchQuery     = $SearchQuery
-		UpdateType      = $UpdateType
-		UpdateId        = $Update.UpdateId
-		KB              = $kb
-		Title           = $Update.Title
-		Product         = $Update.Product
-		Classification  = $Update.Classification
-		LastUpdated     = $Update.LastUpdated
-		Size            = $Update.Size
-		Build           = $Update.Build
-		CatalogUrl      = ('https://www.catalog.update.microsoft.com/ScopedViewInline.aspx?updateid={0}' -f $Update.UpdateId)
-		LogPath         = $LogPath
-	}
-}
+if ($PSBoundParameters.ContainsKey('IncludeCumulative')) { $script:IncludeCumulativeEffective = [bool]$IncludeCumulative } else { $script:IncludeCumulativeEffective = $true }
+if ($PSBoundParameters.ContainsKey('IncludeDotNet')) { $script:IncludeDotNetEffective = [bool]$IncludeDotNet } else { $script:IncludeDotNetEffective = $true }
+if ($PSBoundParameters.ContainsKey('IncludeSSU')) { $script:IncludeSSUEffective = [bool]$IncludeSSU } else { $script:IncludeSSUEffective = $true }
+if ($PSBoundParameters.ContainsKey('IncludeDefender')) { $script:IncludeDefenderEffective = [bool]$IncludeDefender } else { $script:IncludeDefenderEffective = $false }
+if ($PSBoundParameters.ContainsKey('IncludeEdge')) { $script:IncludeEdgeEffective = [bool]$IncludeEdge } else { $script:IncludeEdgeEffective = $false }
+if ($PSBoundParameters.ContainsKey('IncludePreview')) { $script:IncludePreviewEffective = [bool]$IncludePreview } else { $script:IncludePreviewEffective = $false }
+if ($PSBoundParameters.ContainsKey('IncludeInsider')) { $script:IncludeInsiderEffective = [bool]$IncludeInsider } else { $script:IncludeInsiderEffective = $false }
 
 $scriptName = Split-Path -Path $PSCommandPath -Leaf
-Start-TSxLog -FilePath $LogPath
+Start-TSxLog -FilePath $script:LogFilePath -Force:$Force
 Write-TSxLog -Message ('{0} started' -f $scriptName)
 
 if (-not $PSBoundParameters.ContainsKey('Architecture')) {
@@ -411,39 +130,40 @@ if (-not $PSBoundParameters.ContainsKey('Architecture')) {
 Write-TSxLog -Message ('OperatingSystem: {0}' -f $OperatingSystem)
 Write-TSxLog -Message ('Architecture: {0}' -f $Architecture)
 Write-TSxLog -Message ('LatestOnly: {0}' -f $LatestOnly.IsPresent)
-Write-TSxLog -Message ('IncludeCumulative: {0}' -f $IncludeCumulative.IsPresent)
-Write-TSxLog -Message ('IncludeDotNet: {0}' -f $IncludeDotNet.IsPresent)
-Write-TSxLog -Message ('IncludeSSU: {0}' -f $IncludeSSU.IsPresent)
-Write-TSxLog -Message ('IncludeDefender: {0}' -f $IncludeDefender.IsPresent)
-Write-TSxLog -Message ('IncludeEdge: {0}' -f $IncludeEdge.IsPresent)
-Write-TSxLog -Message ('IncludePreview: {0}' -f $IncludePreview.IsPresent)
-Write-TSxLog -Message ('IncludeInsider: {0}' -f $IncludeInsider.IsPresent)
+Write-TSxLog -Message ('IncludeCumulative: {0}' -f $script:IncludeCumulativeEffective)
+Write-TSxLog -Message ('IncludeDotNet: {0}' -f $script:IncludeDotNetEffective)
+Write-TSxLog -Message ('IncludeSSU: {0}' -f $script:IncludeSSUEffective)
+Write-TSxLog -Message ('IncludeDefender: {0}' -f $script:IncludeDefenderEffective)
+Write-TSxLog -Message ('IncludeEdge: {0}' -f $script:IncludeEdgeEffective)
+Write-TSxLog -Message ('IncludePreview: {0}' -f $script:IncludePreviewEffective)
+Write-TSxLog -Message ('IncludeInsider: {0}' -f $script:IncludeInsiderEffective)
 Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
-Write-TSxLog -Message ('Log path: {0}' -f $LogPath)
+Write-TSxLog -Message ('Log root path: {0}' -f $script:LogRootPath)
+Write-TSxLog -Message ('Log path: {0}' -f $script:LogFilePath)
 
-if (-not ($IncludeCumulative -or $IncludeDotNet -or $IncludeSSU -or $IncludeDefender -or $IncludeEdge)) {
+if (-not ($script:IncludeCumulativeEffective -or $script:IncludeDotNetEffective -or $script:IncludeSSUEffective -or $script:IncludeDefenderEffective -or $script:IncludeEdgeEffective)) {
 	throw 'No update categories selected. Enable at least one category switch.'
 }
 
 $categoryDefinitions = New-Object System.Collections.Generic.List[object]
 
-if ($IncludeCumulative) {
+if ($script:IncludeCumulativeEffective) {
 	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Cumulative' -Query '{0} {1} cumulative update' -IncludePatterns @('(?i)Cumulative Update for') -ExcludePatterns @('(?i)\.NET Framework', '(?i)Dynamic Cumulative Update', '(?i)Setup Dynamic Update', '(?i)Adobe')))
 }
 
-if ($IncludeDotNet) {
+if ($script:IncludeDotNetEffective) {
 	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'DotNet' -Query '{0} {1} .NET Framework cumulative update' -IncludePatterns @('(?i)Cumulative Update for .*\.NET Framework')))
 }
 
-if ($IncludeSSU) {
+if ($script:IncludeSSUEffective) {
 	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'SSU' -Query '{0} {1} servicing stack update' -IncludePatterns @('(?i)Servicing Stack Update')))
 }
 
-if ($IncludeDefender) {
+if ($script:IncludeDefenderEffective) {
 	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Defender' -Query '{0} {1} defender update' -IncludePatterns @('(?i)Defender', '(?i)Security Intelligence Update')))
 }
 
-if ($IncludeEdge) {
+if ($script:IncludeEdgeEffective) {
 	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Edge' -Query '{0} {1} Edge Stable' -IncludePatterns @('(?i)Edge')))
 }
 
@@ -452,7 +172,13 @@ $seenUpdateIds = New-Object 'System.Collections.Generic.HashSet[string]' ([Syste
 
 foreach ($categoryDefinition in $categoryDefinitions) {
 	$searchQuery = $categoryDefinition.Query -f $OperatingSystem, $Architecture
-	$searchResults = @(Get-TSxCatalogSearchResults -Query $searchQuery)
+	if ($PSCmdlet.ShouldProcess($searchQuery, ('Query Windows Update Catalog for {0}' -f $categoryDefinition.Name))) {
+		$searchResults = @(Get-TSxCatalogSearchResults -Query $searchQuery)
+	}
+	else {
+		$searchResults = @()
+		Write-TSxLog -Level 'WARN' -Message ('WhatIf mode skipped catalog query for {0}' -f $categoryDefinition.Name)
+	}
 	Write-TSxLog -Message ('Catalog returned {0} result(s) for {1}' -f $searchResults.Count, $categoryDefinition.Name)
 
 	if ($searchResults.Count -eq 0 -and $WhatIfPreference) {
@@ -464,9 +190,9 @@ foreach ($categoryDefinition in $categoryDefinitions) {
 		$matchesCategory = Test-TSxTitlePatternMatch -Title $_.Title -IncludePatterns $categoryDefinition.IncludePatterns -ExcludePatterns $categoryDefinition.ExcludePatterns
 		$matchesArchitecture = $_.Title -match ('(?i){0}' -f [regex]::Escape($Architecture))
 		$matchesOperatingSystem = Test-TSxOperatingSystemMatch -Title $_.Title -Product $_.Product -OperatingSystem $OperatingSystem
-		$matchesPreviewRule = $IncludePreview -or ($_.Title -notmatch '(?i)Preview')
+		$matchesPreviewRule = $script:IncludePreviewEffective -or ($_.Title -notmatch '(?i)Preview')
 		$isInsiderUpdate = $_.Title -match '(?i)Windows Insider|Insider Pre-Release' -or $_.Product -match '(?i)Windows Insider|Insider Pre-Release'
-		$matchesInsiderRule = $IncludeInsider -or (-not $isInsiderUpdate)
+		$matchesInsiderRule = $script:IncludeInsiderEffective -or (-not $isInsiderUpdate)
 		$matchesCategory -and $matchesArchitecture -and $matchesOperatingSystem -and $matchesPreviewRule -and $matchesInsiderRule
 	}
 
@@ -485,7 +211,7 @@ foreach ($categoryDefinition in $categoryDefinitions) {
 	$categorySelection = if ($LatestOnly) { @($sortedCategoryUpdates | Select-Object -First 1) } else { $sortedCategoryUpdates }
 	foreach ($update in $categorySelection) {
 		if ($seenUpdateIds.Add([string]$update.UpdateId)) {
-			$null = $outputUpdates.Add((ConvertTo-TSxUpdateObject -Update $update -OperatingSystem $OperatingSystem -Architecture $Architecture -SearchQuery $searchQuery -UpdateType $categoryDefinition.Name -LogPath $LogPath))
+			$null = $outputUpdates.Add((ConvertTo-TSxUpdateObject -Update $update -OperatingSystem $OperatingSystem -Architecture $Architecture -SearchQuery $searchQuery -UpdateType $categoryDefinition.Name -LogPath $script:LogFilePath))
 		}
 		else {
 			Write-TSxLog -Message ('Skipping duplicate UpdateId {0} from category {1}' -f $update.UpdateId, $categoryDefinition.Name)

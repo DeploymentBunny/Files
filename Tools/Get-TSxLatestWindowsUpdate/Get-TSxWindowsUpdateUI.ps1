@@ -1,164 +1,188 @@
 <#
 .SYNOPSIS
-Interactive tool to search and download Windows updates for offline image servicing.
+    Windows Forms UI for searching and downloading Windows updates for offline image servicing.
 
 .DESCRIPTION
-Provides a Windows Forms UI that searches Microsoft Update Catalog, lets users select updates,
-and downloads selected files through helper scripts with support for category selection,
-WhatIf, and Force behavior.
+    Provides a Windows Forms front end for Microsoft Update Catalog searches and download execution.
+    The UI supports category selection, architecture selection, and Force behavior,
+    and persists the last used values so the next launch restores the prior session.
 
 .PARAMETER Force
-When set, clears the current log file and forces overwrite behavior in downstream download calls.
-
-.PARAMETER LogPath
-Path to log file. Defaults to %TEMP%\Get-TSxLatestWindowsUpdate\Get-TSxWindowsUpdate.log.
+    When set, clears the current log file and forces overwrite behavior in downstream download calls.
 
 .EXAMPLE
-.\Get-TSxWindowsUpdate.ps1 -Verbose
+    .\Get-TSxWindowsUpdateUI.ps1 -Verbose
 
 .NOTES
-FileName   : Get-TSxWindowsUpdate.ps1
-Version    : 1.2.2
-Author     : Mikael Nystrom
-Contact    : @mikael_nystrom
-Created    : 2026-05-22
-Updated    : 2026-05-22
-Twitter    : @mikael_nystrom
-Disclaimer : This script is provided "AS IS" with no warranties.
+    FileName:    Get-TSxWindowsUpdateUI.ps1
+    Version:     1.2.8
+    Author:      Mikael Nystrom
+    Contact:     @mikael_nystrom
+    Created:     2026-05-22
+    Updated:     2026-05-25
+    Twitter:     @mikael_nystrom
+
+    Disclaimer:
+    This script is provided "AS IS" with no warranties, confers no rights and
+    is not supported by the author.
 
 .LINK
-https://www.deploymentbunny.com
+    https://www.deploymentbunny.com
+
+.FUNCTIONALITY
+    Starts a Windows Forms UI for querying Microsoft Update Catalog and downloading selected updates.
+    Loads and saves last-used UI settings in %TEMP%\Get-TSxLatestWindowsUpdate\Settings.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter()]
-    [switch]$Force,
-
-    [Parameter()]
-    [ValidateNotNullOrEmpty()]
-    [string]$LogPath = (Join-Path -Path (Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate') -ChildPath 'Get-TSxWindowsUpdate.log')
+    [switch]$Force
 )
+
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate'
+$script:LogFilePath = Join-Path -Path $script:LogRootPath -ChildPath ('{0}.log' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
+$script:SettingsDirectory = Join-Path -Path $script:LogRootPath -ChildPath 'Settings'
+$script:SettingsFile = Join-Path -Path $script:SettingsDirectory -ChildPath ('{0}.settings.json' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+$fontMain = [System.Drawing.Font]::new('Arial', 10, [System.Drawing.FontStyle]::Bold)
+$fontHeading = [System.Drawing.Font]::new('Arial', 11, [System.Drawing.FontStyle]::Bold)
+$fontData = [System.Drawing.Font]::new('Courier New', 10)
+$colorPrimaryButton = [System.Drawing.ColorTranslator]::FromHtml('#F35800')
+$colorSecondaryButton = [System.Drawing.ColorTranslator]::FromHtml('#F5B041')
+$colorButtonText = [System.Drawing.ColorTranslator]::FromHtml('#1c1d1d')
 
 $script:OutputTextBox = $null
 
-function Start-TSxLog {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath
-    )
-
-    $parentPath = Split-Path -Path $FilePath -Parent
-    if (-not (Test-Path -Path $parentPath)) {
-        $null = New-Item -Path $parentPath -ItemType Directory -Force
-    }
-
-    if (-not (Test-Path -Path $FilePath)) {
-        $null = New-Item -Path $FilePath -ItemType File -Force
-    }
-
-    if ($Force) {
-        Clear-Content -Path $FilePath -Force
-    }
-
-    $script:ScriptLogFilePath = $FilePath
-}
-
-function Write-TSxLog {
-    [CmdletBinding()]
+function Add-TSxUiOutput {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Message,
 
         [Parameter()]
-        [ValidateSet('INFO', 'WARN', 'ERROR')]
+        [ValidateSet('INFO', 'WARN', 'ERROR', 'VERBOSE')]
         [string]$Level = 'INFO'
     )
 
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $entry = '[{0}] [{1}] {2}' -f $timestamp, $Level, $Message
-    Add-Content -Path $script:ScriptLogFilePath -Value $entry
-    Write-Verbose $Message
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return
+    }
 
-    if ($script:OutputTextBox) {
-        $script:OutputTextBox.AppendText($entry + [Environment]::NewLine)
+    $line = '[{0}] [{1}] {2}' -f (Get-Date -Format 'HH:mm:ss'), $Level, $Message
+    if ($script:OutputTextBox -and -not $script:OutputTextBox.IsDisposed) {
+        $script:OutputTextBox.AppendText($line + [Environment]::NewLine)
         $script:OutputTextBox.SelectionStart = $script:OutputTextBox.TextLength
         $script:OutputTextBox.ScrollToCaret()
         [System.Windows.Forms.Application]::DoEvents()
     }
 }
 
-function Get-TSxDefaultArchitecture {
-    [CmdletBinding()]
-    param()
-
-    switch -Regex ($env:PROCESSOR_ARCHITECTURE) {
-        'ARM64' { return 'arm64' }
-        '64' { return 'x64' }
-        default { return 'x86' }
-    }
-}
-
-function Invoke-TSxDownloadJob {
-    [CmdletBinding()]
+function Save-UISettings {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$DownloadScriptPath,
+        [string]$OperatingSystem,
 
         [Parameter(Mandatory = $true)]
-        [psobject]$SelectedUpdate,
+        [string]$Architecture,
 
         [Parameter(Mandatory = $true)]
         [string]$DownloadPath,
 
         [Parameter(Mandatory = $true)]
-        [string]$LogPath,
+        [bool]$Force,
 
-        [Parameter()]
-        [bool]$UseWhatIf = $false,
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludeCumulative,
 
-        [Parameter()]
-        [bool]$UseForce = $false
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludeDotNet,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludeSSU,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludeDefender,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludeEdge,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludePreview,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$IncludeInsider
     )
 
-    $job = Start-Job -ScriptBlock {
-        param(
-            [string]$DownloadScriptPath,
-            [psobject]$SelectedUpdate,
-            [string]$DownloadPath,
-            [string]$LogPath,
-            [bool]$UseWhatIf,
-            [bool]$UseForce
-        )
+    try {
+        if (-not (Test-Path -LiteralPath $Script:SettingsDirectory -PathType Container)) {
+            New-Item -ItemType Directory -Path $Script:SettingsDirectory -Force | Out-Null
+        }
 
-        $SelectedUpdate | & $DownloadScriptPath -Path $DownloadPath -LogPath $LogPath -WhatIf:$UseWhatIf -Force:$UseForce -Verbose 4>&1
-    } -ArgumentList $DownloadScriptPath, $SelectedUpdate, $DownloadPath, $LogPath, $UseWhatIf, $UseForce
+        $settings = [pscustomobject]@{
+            OperatingSystem = $OperatingSystem
+            Architecture    = $Architecture
+            DownloadPath    = $DownloadPath
+            Force           = $Force
+            IncludeCumulative = $IncludeCumulative
+            IncludeDotNet   = $IncludeDotNet
+            IncludeSSU      = $IncludeSSU
+            IncludeDefender = $IncludeDefender
+            IncludeEdge     = $IncludeEdge
+            IncludePreview  = $IncludePreview
+            IncludeInsider  = $IncludeInsider
+        }
+
+        $settings | ConvertTo-Json -Depth 5 | Out-File -LiteralPath $Script:SettingsFile -Encoding UTF8
+        Write-TSxLog -Message ('Settings saved: {0}' -f $Script:SettingsFile)
+    }
+    catch {
+        Write-TSxLog -Level 'WARN' -Message ('Failed to save settings. Error: {0}' -f $_.Exception.Message)
+    }
+}
+
+function Import-UISettings {
+    if (-not (Test-Path -LiteralPath $Script:SettingsFile -PathType Leaf)) {
+        return $null
+    }
 
     try {
-        while ($job.State -eq 'Running' -or $job.State -eq 'NotStarted') {
-            [System.Windows.Forms.Application]::DoEvents()
-            [System.Threading.Thread]::Sleep(150)
-        }
-
-        if ($job.State -ne 'Completed') {
-            $reason = $job.ChildJobs[0].JobStateInfo.Reason
-            if ($reason) {
-                throw $reason
-            }
-
-            throw ('Download job finished with unexpected state: {0}' -f $job.State)
-        }
-
-        return @(Receive-Job -Job $job -ErrorAction Stop)
+        $settings = Get-Content -LiteralPath $Script:SettingsFile -Raw | ConvertFrom-Json
+        Write-TSxLog -Message ('Settings loaded: {0}' -f $Script:SettingsFile)
+        return $settings
     }
-    finally {
-        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    catch {
+        Write-TSxLog -Level 'WARN' -Message ('Failed to load settings. Error: {0}' -f $_.Exception.Message)
+        return $null
+    }
+}
+
+function Get-TSxDeploymentBunnyLogoImage {
+    $dedupUiPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Start-VIADeDupJob\Invoke-TSxDeDupJobUI.ps1'
+    if (-not (Test-Path -LiteralPath $dedupUiPath -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $dedupUiContent = Get-Content -LiteralPath $dedupUiPath -Raw
+        $pictureStringMatch = [regex]::Match($dedupUiContent, '\$PictureString\s*=\s*"(?<data>[^"]+)"')
+        if (-not $pictureStringMatch.Success) {
+            return $null
+        }
+
+        $logoBytes = [Convert]::FromBase64String($pictureStringMatch.Groups['data'].Value)
+        $logoStream = New-Object System.IO.MemoryStream(,$logoBytes)
+        return [System.Drawing.Image]::FromStream($logoStream)
+    }
+    catch {
+        return $null
     }
 }
 
@@ -175,127 +199,177 @@ if (-not (Test-Path -Path $downloadScriptPath)) {
 }
 
 $scriptName = Split-Path -Path $PSCommandPath -Leaf
-Start-TSxLog -FilePath $LogPath
+Start-TSxLog -FilePath $script:LogFilePath -Force:$Force
 Write-TSxLog -Message ('{0} started' -f $scriptName)
 Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
-Write-TSxLog -Message ('Log path: {0}' -f $LogPath)
+Write-TSxLog -Message ('Log root path: {0}' -f $script:LogRootPath)
+Write-TSxLog -Message ('Log path: {0}' -f $script:LogFilePath)
+Add-TSxUiOutput -Message ('{0} started' -f $scriptName)
+Add-TSxUiOutput -Message ('Log path: {0}' -f $script:LogFilePath)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Get-TSxWindowsUpdate'
 $form.StartPosition = 'CenterScreen'
 $form.Size = New-Object System.Drawing.Size(1180, 760)
 $form.MinimumSize = New-Object System.Drawing.Size(1000, 680)
+$form.BackColor = [System.Drawing.Color]::White
+
+$logoImage = Get-TSxDeploymentBunnyLogoImage
+if ($logoImage) {
+    $pictureBox = New-Object System.Windows.Forms.PictureBox
+    $pictureBox.Location = New-Object System.Drawing.Point(1018, 4)
+    $pictureBox.Size = New-Object System.Drawing.Size(150, 70)
+    $pictureBox.Image = $logoImage
+    $pictureBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+    $pictureBox.BackColor = [System.Drawing.Color]::White
+    $pictureBox.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+    [void]$form.Controls.Add($pictureBox)
+}
 
 $labelOS = New-Object System.Windows.Forms.Label
 $labelOS.Location = New-Object System.Drawing.Point(12, 16)
 $labelOS.Size = New-Object System.Drawing.Size(120, 20)
 $labelOS.Text = 'Operating System'
+$labelOS.Font = $fontMain
+$labelOS.BackColor = [System.Drawing.Color]::White
 
 $textOS = New-Object System.Windows.Forms.TextBox
 $textOS.Location = New-Object System.Drawing.Point(138, 12)
-$textOS.Size = New-Object System.Drawing.Size(320, 23)
+$textOS.Size = New-Object System.Drawing.Size(300, 23)
 $textOS.Text = 'Windows 11 24H2'
+$textOS.Font = $fontMain
 
 $labelArchitecture = New-Object System.Windows.Forms.Label
-$labelArchitecture.Location = New-Object System.Drawing.Point(470, 16)
+$labelArchitecture.Location = New-Object System.Drawing.Point(446, 16)
 $labelArchitecture.Size = New-Object System.Drawing.Size(80, 20)
 $labelArchitecture.Text = 'Architecture'
+$labelArchitecture.Font = $fontMain
+$labelArchitecture.BackColor = [System.Drawing.Color]::White
 
 $comboArchitecture = New-Object System.Windows.Forms.ComboBox
-$comboArchitecture.Location = New-Object System.Drawing.Point(556, 12)
+$comboArchitecture.Location = New-Object System.Drawing.Point(532, 12)
 $comboArchitecture.Size = New-Object System.Drawing.Size(110, 23)
 $comboArchitecture.DropDownStyle = 'DropDownList'
+$comboArchitecture.Font = $fontMain
 [void]$comboArchitecture.Items.AddRange(@('x64', 'arm64', 'x86'))
 $comboArchitecture.SelectedItem = Get-TSxDefaultArchitecture
 
 $buttonSearch = New-Object System.Windows.Forms.Button
-$buttonSearch.Location = New-Object System.Drawing.Point(678, 10)
+$buttonSearch.Location = New-Object System.Drawing.Point(654, 10)
 $buttonSearch.Size = New-Object System.Drawing.Size(90, 27)
 $buttonSearch.Text = 'Search'
+$buttonSearch.Font = $fontMain
+$buttonSearch.BackColor = $colorPrimaryButton
+$buttonSearch.ForeColor = $colorButtonText
 
 $buttonSelectAll = New-Object System.Windows.Forms.Button
-$buttonSelectAll.Location = New-Object System.Drawing.Point(780, 10)
+$buttonSelectAll.Location = New-Object System.Drawing.Point(748, 10)
 $buttonSelectAll.Size = New-Object System.Drawing.Size(90, 27)
 $buttonSelectAll.Text = 'Select All'
+$buttonSelectAll.Font = $fontMain
+$buttonSelectAll.BackColor = $colorSecondaryButton
+$buttonSelectAll.ForeColor = $colorButtonText
 
 $buttonClearSelection = New-Object System.Windows.Forms.Button
-$buttonClearSelection.Location = New-Object System.Drawing.Point(882, 10)
+$buttonClearSelection.Location = New-Object System.Drawing.Point(842, 10)
 $buttonClearSelection.Size = New-Object System.Drawing.Size(90, 27)
 $buttonClearSelection.Text = 'Clear'
+$buttonClearSelection.Font = $fontMain
+$buttonClearSelection.BackColor = $colorSecondaryButton
+$buttonClearSelection.ForeColor = $colorButtonText
 
 $checkForce = New-Object System.Windows.Forms.CheckBox
-$checkForce.Location = New-Object System.Drawing.Point(980, 14)
-$checkForce.Size = New-Object System.Drawing.Size(170, 20)
+$checkForce.Location = New-Object System.Drawing.Point(886, 70)
+$checkForce.Size = New-Object System.Drawing.Size(250, 20)
 $checkForce.Text = 'Force overwrite existing'
 $checkForce.Checked = $Force.IsPresent
+$checkForce.Font = $fontMain
+$checkForce.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeCumulative = New-Object System.Windows.Forms.CheckBox
 $checkIncludeCumulative.Location = New-Object System.Drawing.Point(12, 70)
-$checkIncludeCumulative.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeCumulative.Size = New-Object System.Drawing.Size(112, 20)
 $checkIncludeCumulative.Text = 'Include LCU'
 $checkIncludeCumulative.Checked = $true
+$checkIncludeCumulative.Font = $fontMain
+$checkIncludeCumulative.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDotNet = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDotNet.Location = New-Object System.Drawing.Point(148, 70)
-$checkIncludeDotNet.Size = New-Object System.Drawing.Size(150, 20)
+$checkIncludeDotNet.Location = New-Object System.Drawing.Point(126, 70)
+$checkIncludeDotNet.Size = New-Object System.Drawing.Size(136, 20)
 $checkIncludeDotNet.Text = 'Include .NET CU'
 $checkIncludeDotNet.Checked = $true
+$checkIncludeDotNet.Font = $fontMain
+$checkIncludeDotNet.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeSSU = New-Object System.Windows.Forms.CheckBox
-$checkIncludeSSU.Location = New-Object System.Drawing.Point(304, 70)
-$checkIncludeSSU.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludeSSU.Location = New-Object System.Drawing.Point(264, 70)
+$checkIncludeSSU.Size = New-Object System.Drawing.Size(112, 20)
 $checkIncludeSSU.Text = 'Include SSU'
 $checkIncludeSSU.Checked = $true
+$checkIncludeSSU.Font = $fontMain
+$checkIncludeSSU.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDefender = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDefender.Location = New-Object System.Drawing.Point(430, 70)
-$checkIncludeDefender.Size = New-Object System.Drawing.Size(150, 20)
+$checkIncludeDefender.Location = New-Object System.Drawing.Point(378, 70)
+$checkIncludeDefender.Size = New-Object System.Drawing.Size(142, 20)
 $checkIncludeDefender.Text = 'Include Defender'
 $checkIncludeDefender.Checked = $false
+$checkIncludeDefender.Font = $fontMain
+$checkIncludeDefender.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeEdge = New-Object System.Windows.Forms.CheckBox
-$checkIncludeEdge.Location = New-Object System.Drawing.Point(586, 70)
-$checkIncludeEdge.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludeEdge.Location = New-Object System.Drawing.Point(522, 70)
+$checkIncludeEdge.Size = New-Object System.Drawing.Size(110, 20)
 $checkIncludeEdge.Text = 'Include Edge'
 $checkIncludeEdge.Checked = $false
+$checkIncludeEdge.Font = $fontMain
+$checkIncludeEdge.BackColor = [System.Drawing.Color]::White
 
 $checkIncludePreview = New-Object System.Windows.Forms.CheckBox
-$checkIncludePreview.Location = New-Object System.Drawing.Point(712, 70)
-$checkIncludePreview.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludePreview.Location = New-Object System.Drawing.Point(634, 70)
+$checkIncludePreview.Size = New-Object System.Drawing.Size(130, 20)
 $checkIncludePreview.Text = 'Include Preview'
 $checkIncludePreview.Checked = $false
+$checkIncludePreview.Font = $fontMain
+$checkIncludePreview.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeInsider = New-Object System.Windows.Forms.CheckBox
-$checkIncludeInsider.Location = New-Object System.Drawing.Point(838, 70)
-$checkIncludeInsider.Size = New-Object System.Drawing.Size(120, 20)
+$checkIncludeInsider.Location = New-Object System.Drawing.Point(766, 70)
+$checkIncludeInsider.Size = New-Object System.Drawing.Size(118, 20)
 $checkIncludeInsider.Text = 'Include Insider'
 $checkIncludeInsider.Checked = $false
+$checkIncludeInsider.Font = $fontMain
+$checkIncludeInsider.BackColor = [System.Drawing.Color]::White
 
 $labelPath = New-Object System.Windows.Forms.Label
 $labelPath.Location = New-Object System.Drawing.Point(12, 48)
 $labelPath.Size = New-Object System.Drawing.Size(120, 20)
 $labelPath.Text = 'Download Path'
+$labelPath.Font = $fontMain
+$labelPath.BackColor = [System.Drawing.Color]::White
 
 $textPath = New-Object System.Windows.Forms.TextBox
 $textPath.Location = New-Object System.Drawing.Point(138, 44)
-$textPath.Size = New-Object System.Drawing.Size(630, 23)
+$textPath.Size = New-Object System.Drawing.Size(610, 23)
 $textPath.Text = (Join-Path -Path $env:TEMP -ChildPath 'TSxCatalogDownloads')
+$textPath.Font = $fontMain
 
 $buttonBrowse = New-Object System.Windows.Forms.Button
-$buttonBrowse.Location = New-Object System.Drawing.Point(780, 42)
+$buttonBrowse.Location = New-Object System.Drawing.Point(754, 42)
 $buttonBrowse.Size = New-Object System.Drawing.Size(90, 27)
 $buttonBrowse.Text = 'Browse...'
-
-$checkWhatIf = New-Object System.Windows.Forms.CheckBox
-$checkWhatIf.Location = New-Object System.Drawing.Point(882, 46)
-$checkWhatIf.Size = New-Object System.Drawing.Size(120, 20)
-$checkWhatIf.Text = 'WhatIf download'
-$checkWhatIf.Checked = $true
+$buttonBrowse.Font = $fontMain
+$buttonBrowse.BackColor = $colorSecondaryButton
+$buttonBrowse.ForeColor = $colorButtonText
 
 $buttonDownload = New-Object System.Windows.Forms.Button
-$buttonDownload.Location = New-Object System.Drawing.Point(1010, 42)
-$buttonDownload.Size = New-Object System.Drawing.Size(140, 27)
+$buttonDownload.Location = New-Object System.Drawing.Point(848, 42)
+$buttonDownload.Size = New-Object System.Drawing.Size(160, 27)
 $buttonDownload.Text = 'Download Selected'
+$buttonDownload.Font = $fontMain
+$buttonDownload.BackColor = $colorPrimaryButton
+$buttonDownload.ForeColor = $colorButtonText
 
 $progressDownloads = New-Object System.Windows.Forms.ProgressBar
 $progressDownloads.Location = New-Object System.Drawing.Point(12, 96)
@@ -321,6 +395,8 @@ $gridUpdates.ReadOnly = $false
 $gridUpdates.SelectionMode = 'FullRowSelect'
 $gridUpdates.MultiSelect = $true
 $gridUpdates.AutoGenerateColumns = $false
+$gridUpdates.BackgroundColor = [System.Drawing.Color]::White
+$gridUpdates.ColumnHeadersDefaultCellStyle.Font = $fontMain
 
 $colSelect = New-Object System.Windows.Forms.DataGridViewCheckBoxColumn
 $colSelect.Name = 'Select'
@@ -390,7 +466,8 @@ $textOutput = New-Object System.Windows.Forms.RichTextBox
 $textOutput.Dock = 'Fill'
 $textOutput.ReadOnly = $true
 $textOutput.WordWrap = $false
-$textOutput.Font = New-Object System.Drawing.Font('Consolas', 9)
+$textOutput.BackColor = [System.Drawing.Color]::White
+$textOutput.Font = $fontData
 $script:OutputTextBox = $textOutput
 
 [void]$splitMain.Panel1.Controls.Add($gridUpdates)
@@ -398,8 +475,10 @@ $script:OutputTextBox = $textOutput
 
 $statusBar = New-Object System.Windows.Forms.StatusStrip
 $statusBar.Dock = 'Bottom'
+$statusBar.BackColor = [System.Drawing.Color]::White
 $statusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
 $statusLabel.Text = 'Ready'
+$statusLabel.Font = $fontHeading
 [void]$statusBar.Items.Add($statusLabel)
 
 [void]$form.Controls.Add($labelOS)
@@ -413,7 +492,6 @@ $statusLabel.Text = 'Ready'
 [void]$form.Controls.Add($labelPath)
 [void]$form.Controls.Add($textPath)
 [void]$form.Controls.Add($buttonBrowse)
-[void]$form.Controls.Add($checkWhatIf)
 [void]$form.Controls.Add($buttonDownload)
 [void]$form.Controls.Add($checkIncludeCumulative)
 [void]$form.Controls.Add($checkIncludeDotNet)
@@ -470,18 +548,24 @@ $buttonSearch.Add_Click({
             $statusLabel.Text = 'Searching updates...'
             [System.Windows.Forms.Application]::DoEvents()
             Write-TSxLog -Message ('Searching updates for {0} ({1})' -f $osText, $architecture)
+            Add-TSxUiOutput -Message ('Searching updates for {0} ({1})' -f $osText, $architecture)
 
-            $searchOutput = @(& $listScriptPath -OperatingSystem $osText -Architecture $architecture -LogPath $LogPath -Force:$checkForce.Checked -IncludeCumulative:$checkIncludeCumulative.Checked -IncludeDotNet:$checkIncludeDotNet.Checked -IncludeSSU:$checkIncludeSSU.Checked -IncludeDefender:$checkIncludeDefender.Checked -IncludeEdge:$checkIncludeEdge.Checked -IncludePreview:$checkIncludePreview.Checked -IncludeInsider:$checkIncludeInsider.Checked -Verbose 4>&1)
+            $searchOutput = @(& $listScriptPath -OperatingSystem $osText -Architecture $architecture -Force:$checkForce.Checked -IncludeCumulative:$checkIncludeCumulative.Checked -IncludeDotNet:$checkIncludeDotNet.Checked -IncludeSSU:$checkIncludeSSU.Checked -IncludeDefender:$checkIncludeDefender.Checked -IncludeEdge:$checkIncludeEdge.Checked -IncludePreview:$checkIncludePreview.Checked -IncludeInsider:$checkIncludeInsider.Checked -Verbose 4>&1)
             $updates = @()
             foreach ($outputItem in $searchOutput) {
                 if ($outputItem -is [System.Management.Automation.VerboseRecord]) {
                     Write-TSxLog -Message $outputItem.Message
+                    Add-TSxUiOutput -Level 'VERBOSE' -Message $outputItem.Message
                 }
                 elseif ($outputItem -is [System.Management.Automation.WarningRecord]) {
                     Write-TSxLog -Level 'WARN' -Message $outputItem.Message
+                    Add-TSxUiOutput -Level 'WARN' -Message $outputItem.Message
                 }
                 elseif ($outputItem -is [System.Management.Automation.ErrorRecord]) {
                     throw $outputItem.Exception
+                }
+                elseif ($outputItem -is [System.Management.Automation.InformationRecord]) {
+                    Add-TSxUiOutput -Message ([string]$outputItem.MessageData)
                 }
                 else {
                     $updates += $outputItem
@@ -504,6 +588,7 @@ $buttonSearch.Add_Click({
             }
 
             Write-TSxLog -Message ('Search returned {0} update(s)' -f $updates.Count)
+            Add-TSxUiOutput -Message ('Search returned {0} update(s)' -f $updates.Count)
             $statusLabel.Text = ('Found {0} updates' -f $updates.Count)
         }
         catch {
@@ -563,6 +648,7 @@ $buttonDownload.Add_Click({
             }
 
             Write-TSxLog -Message ('Starting download for {0} selected update(s)' -f $selectedUpdateCount)
+            Add-TSxUiOutput -Message ('Starting download for {0} selected update(s)' -f $selectedUpdateCount)
             $statusLabel.Text = ('Downloading {0} updates...' -f $selectedUpdateCount)
             $progressDownloads.Value = 0
             $progressDownloads.Maximum = $selectedUpdateCount
@@ -578,19 +664,27 @@ $buttonDownload.Add_Click({
                     $progressDownloads.MarqueeAnimationSpeed = 25
                     [System.Windows.Forms.Application]::DoEvents()
 
-                    $singleDownloadOutput = @(Invoke-TSxDownloadJob -DownloadScriptPath $downloadScriptPath -SelectedUpdate $selectedUpdate -DownloadPath $downloadPath -LogPath $LogPath -UseWhatIf $checkWhatIf.Checked -UseForce $checkForce.Checked)
+                    $singleDownloadOutput = @(Invoke-TSxDownloadJob -DownloadScriptPath $downloadScriptPath -SelectedUpdate $selectedUpdate -DownloadPath $downloadPath -UseWhatIf:$false -UseForce $checkForce.Checked)
                     foreach ($outputItem in $singleDownloadOutput) {
                         if ($outputItem -is [System.Management.Automation.VerboseRecord]) {
                             Write-TSxLog -Message $outputItem.Message
+                            Add-TSxUiOutput -Level 'VERBOSE' -Message $outputItem.Message
                         }
                         elseif ($outputItem -is [System.Management.Automation.WarningRecord]) {
                             Write-TSxLog -Level 'WARN' -Message $outputItem.Message
+                            Add-TSxUiOutput -Level 'WARN' -Message $outputItem.Message
                         }
                         elseif ($outputItem -is [System.Management.Automation.ErrorRecord]) {
                             throw $outputItem.Exception
                         }
+                        elseif ($outputItem -is [System.Management.Automation.InformationRecord]) {
+                            Add-TSxUiOutput -Message ([string]$outputItem.MessageData)
+                        }
                         else {
                             $downloadResults += $outputItem
+                            if ($outputItem -is [pscustomobject] -and $outputItem.PSObject.Properties['FileName']) {
+                                Add-TSxUiOutput -Message ('Result: {0} (Skipped={1}, Downloaded={2})' -f [string]$outputItem.FileName, [bool]$outputItem.WasSkipped, [bool]$outputItem.WasDownloaded)
+                            }
                         }
                     }
 
@@ -601,12 +695,14 @@ $buttonDownload.Add_Click({
                 }
 
                 Write-TSxLog -Message ('Download process returned {0} result(s)' -f $downloadResults.Count)
+                Add-TSxUiOutput -Message ('Download process returned {0} result(s)' -f $downloadResults.Count)
                 $statusLabel.Text = ('Done. Processed {0} updates.' -f $downloadResults.Count)
                 [System.Windows.Forms.MessageBox]::Show(('Processed {0} update(s).' -f $downloadResults.Count), 'Completed', 'OK', 'Information') | Out-Null
             }
         }
         catch {
             Write-TSxLog -Level 'ERROR' -Message $_.Exception.Message
+            Add-TSxUiOutput -Level 'ERROR' -Message $_.Exception.Message
             $statusLabel.Text = 'Download failed'
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Download Failed', 'OK', 'Error') | Out-Null
         }
@@ -617,6 +713,34 @@ $buttonDownload.Add_Click({
                 $statusLabel.Text = $statusLabel.Text
             }
         }
+    })
+
+$loadedSettings = Import-UISettings
+if ($loadedSettings) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$loadedSettings.OperatingSystem)) {
+        $textOS.Text = [string]$loadedSettings.OperatingSystem
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$loadedSettings.Architecture) -and $comboArchitecture.Items.Contains([string]$loadedSettings.Architecture)) {
+        $comboArchitecture.SelectedItem = [string]$loadedSettings.Architecture
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$loadedSettings.DownloadPath)) {
+        $textPath.Text = [string]$loadedSettings.DownloadPath
+    }
+
+    if ($null -ne $loadedSettings.Force) { $checkForce.Checked = [bool]$loadedSettings.Force }
+    if ($null -ne $loadedSettings.IncludeCumulative) { $checkIncludeCumulative.Checked = [bool]$loadedSettings.IncludeCumulative }
+    if ($null -ne $loadedSettings.IncludeDotNet) { $checkIncludeDotNet.Checked = [bool]$loadedSettings.IncludeDotNet }
+    if ($null -ne $loadedSettings.IncludeSSU) { $checkIncludeSSU.Checked = [bool]$loadedSettings.IncludeSSU }
+    if ($null -ne $loadedSettings.IncludeDefender) { $checkIncludeDefender.Checked = [bool]$loadedSettings.IncludeDefender }
+    if ($null -ne $loadedSettings.IncludeEdge) { $checkIncludeEdge.Checked = [bool]$loadedSettings.IncludeEdge }
+    if ($null -ne $loadedSettings.IncludePreview) { $checkIncludePreview.Checked = [bool]$loadedSettings.IncludePreview }
+    if ($null -ne $loadedSettings.IncludeInsider) { $checkIncludeInsider.Checked = [bool]$loadedSettings.IncludeInsider }
+}
+
+$form.Add_FormClosing({
+    Save-UISettings -OperatingSystem $textOS.Text.Trim() -Architecture ([string]$comboArchitecture.SelectedItem) -DownloadPath $textPath.Text.Trim() -Force $checkForce.Checked -IncludeCumulative $checkIncludeCumulative.Checked -IncludeDotNet $checkIncludeDotNet.Checked -IncludeSSU $checkIncludeSSU.Checked -IncludeDefender $checkIncludeDefender.Checked -IncludeEdge $checkIncludeEdge.Checked -IncludePreview $checkIncludePreview.Checked -IncludeInsider $checkIncludeInsider.Checked
     })
 
 [void]$form.ShowDialog()

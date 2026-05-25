@@ -4,7 +4,7 @@ Toolset to search and download the latest Windows cumulative updates from Micros
 
 ## Included scripts
 
-- `Get-TSxWindowsUpdate.ps1`: Windows Forms GUI for search and download.
+- `Get-TSxWindowsUpdateUI.ps1`: Windows Forms GUI for search and download.
 - `Get-TSxWindowsUpdateList.ps1`: CLI script that returns catalog entries.
 - `Save-TSxWindowsUpdateFromCatalog.ps1`: CLI script that downloads files from catalog entries.
 
@@ -20,7 +20,8 @@ Default log files:
 - `Get-TSxWindowsUpdateList.log`
 - `Save-TSxWindowsUpdateFromCatalog.log`
 
-You can override log location with `-LogPath`.
+Each script logs automatically to `%TEMP%\Get-TSxLatestWindowsUpdate\<script-name>.log`. `-Force` recreates the current script's log file content for that run.
+No script in this folder accepts a `-LogPath` parameter.
 
 ## For users
 
@@ -29,7 +30,7 @@ You can override log location with `-LogPath`.
 1. Run:
 
 ```powershell
-.\Get-TSxWindowsUpdate.ps1 -Verbose
+.\Get-TSxWindowsUpdateUI.ps1 -Verbose
 ```
 
 2. Enter Operating System (example: `Windows 11 24H2`).
