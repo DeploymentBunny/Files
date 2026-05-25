@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-Downloads an ESD from a URL or catalog item.
+Invokes ESD download from a URL or catalog item.
 
 .DESCRIPTION
 Resolves an ESD download source from direct parameters or a piped catalog object,
-and downloads the ESD to a target folder.
+then downloads the ESD to a target folder.
 
 .PARAMETER CatalogItem
 Optional input object that can provide FilePath and FileName properties.
@@ -22,15 +22,15 @@ Folder where the ESD file will be stored.
 Overwrites existing ESD files.
 
 .EXAMPLE
-.\Get-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
+.\Invoke-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
 
 .NOTES
-	FileName:    Get-TSxESDDownload.ps1
-	Version:     1.3.2
+	FileName:    Invoke-TSxESDDownload.ps1
+	Version:     1.3.3
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-21
+	Updated:     2026-05-25
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -269,7 +269,7 @@ function Save-EsdFile {
 			for ($attempt = 1; $attempt -le $maxBitsAttempts; $attempt++) {
 				Write-Verbose "Downloading with Start-BitsTransfer (attempt $attempt/$maxBitsAttempts): $DestinationPath"
 				try {
-					Start-BitsTransfer -Source $Url -Destination $DestinationPath -Description "Download $([System.IO.Path]::GetFileName($DestinationPath))" -DisplayName 'Get-TSxESDDownload' -ErrorAction Stop
+					Start-BitsTransfer -Source $Url -Destination $DestinationPath -Description "Download $([System.IO.Path]::GetFileName($DestinationPath))" -DisplayName 'Invoke-TSxESDDownload' -ErrorAction Stop
 					return
 				} catch {
 					$errorMessage = [string]$_.Exception.Message

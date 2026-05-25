@@ -26,7 +26,7 @@ Optional (only needed for ESD to WIM conversion):
 
 - Show-TSxESDFiles.ps1: Lists available ESD files
 - Get-TSxESDInfo.ps1: Shows which image indexes exist inside an ESD file
-- Get-TSxESDDownload.ps1: Downloads selected ESD and can optionally start conversion
+- Invoke-TSxESDDownload.ps1: Downloads selected ESD and can optionally start conversion
 - Convert-TSxESDtoWIM.ps1: Converts an existing ESD file to WIM
 - Update-TSxESDCatalogs.ps1: Updates local catalog XML files used by the list command
 
@@ -92,22 +92,7 @@ Output as JSON (for integrations):
 .\Show-TSxESDFiles.ps1 -AsJson
 ~~~
 
-## 3) Inspect images inside an ESD file
-
-Use this to see which image indexes exist before converting to WIM.
-
-~~~powershell
-.\Get-TSxESDInfo.ps1 -EsdPath "C:\Temp\ESD\install.esd"
-~~~
-
-Use downloaded output directly:
-
-~~~powershell
-$download = .\Get-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
-$download | .\Get-TSxESDInfo.ps1
-~~~
-
-## 4) Download an ESD file
+## 3) Download an ESD file
 
 Downloads use the Windows Background Intelligent Transfer Service (BITS) when available.
 This is usually better for large files and unstable connections. If BITS is not available,
@@ -116,20 +101,20 @@ the script falls back to the normal PowerShell web download method.
 ### Simple direct URL download
 
 ~~~powershell
-.\Get-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
+.\Invoke-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
 ~~~
 
 ### Download first matching file from catalog
 
 ~~~powershell
 $choice = .\Show-TSxESDFiles.ps1 -Language en-us -Architecture amd64 -Version 24H2 | Select-Object -First 1
-$choice | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD"
+$choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD"
 ~~~
 
 ### Force overwrite if file already exists
 
 ~~~powershell
-$choice | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -Force
+$choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -Force
 ~~~
 
 Download behavior when file already exists:
@@ -141,7 +126,22 @@ Download behavior when file already exists:
 To see these decisions while running, use -Verbose:
 
 ~~~powershell
-$choice | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -Verbose
+$choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -Verbose
+~~~
+
+## 4) Inspect images inside an ESD file
+
+Use this to see which image indexes exist before converting to WIM.
+
+~~~powershell
+.\Get-TSxESDInfo.ps1 -EsdPath "C:\Temp\ESD\install.esd"
+~~~
+
+Use downloaded output directly:
+
+~~~powershell
+$download = .\Invoke-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
+$download | .\Get-TSxESDInfo.ps1
 ~~~
 
 ## 5) Convert ESD to WIM (optional)
@@ -164,7 +164,7 @@ Convert only selected image indexes:
 Convert directly from downloaded output:
 
 ~~~powershell
-$download = $choice | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD"
+$download = $choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD"
 $download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 ~~~
 
@@ -172,14 +172,14 @@ If you still want a single step, the downloader can start the converter for you:
 
 ~~~powershell
 $choice = .\Show-TSxESDFiles.ps1 -Language en-us -Architecture amd64 -Version 24H2 | Select-Object -First 1
-$choice | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -WimPath "C:\Temp\ESD\install.wim"
+$choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -WimPath "C:\Temp\ESD\install.wim"
 ~~~
 
 Single-step conversion with selected indexes:
 
 ~~~powershell
 $choice = .\Show-TSxESDFiles.ps1 -Language en-us -Architecture amd64 -Version 24H2 | Select-Object -First 1
-$choice | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -Index 1,2
+$choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -Index 1,2
 ~~~
 
 ## Useful filters (plain language)
@@ -207,7 +207,7 @@ Log files are saved here for all scripts:
 
 - %Temp%\TSxWimFileFromInternet
 
-Each script writes to its own log file (for example, Get-TSxESDDownload.log and Convert-TSxESDtoWIM.log).
+Each script writes to its own log file (for example, Invoke-TSxESDDownload.log and Convert-TSxESDtoWIM.log).
 
 ## Safety tips
 
@@ -259,7 +259,7 @@ Download selected row number 2:
 ~~~powershell
 $all = .\Show-TSxESDFiles.ps1 -Language en-us -Architecture amd64
 $selected = $all | Select-Object -Index 1
-$selected | .\Get-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD"
+$selected | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD"
 ~~~
 
 Update catalogs then export list as JSON:
@@ -282,7 +282,7 @@ Update catalogs, download a filtered ESD, inspect it, then convert index 6:
 ~~~powershell
 .\Update-TSxESDCatalogs.ps1
 $esddata = .\Show-TSxESDFiles.ps1 -Architecture amd64 -Version 25H2 -Language en-us -OSLicense Volume
-$esdfile = .\Get-TSxESDDownload.ps1 -Url $esddata.FilePath -FileName C:\Temp\($esddata.FileName)
+$esdfile = .\Invoke-TSxESDDownload.ps1 -Url $esddata.FilePath -FileName C:\Temp\($esddata.FileName)
 .\Get-TSxESDInfo.ps1 -EsdPath $esdfile.DownloadedPath
 .\Convert-TSxESDtoWIM.ps1 -EsdPath $esdfile.DownloadedPath -Index 6
 ~~~
@@ -293,7 +293,7 @@ What each line does:
 	Refreshes the local catalog XML files so your search results are current.
 2. `$esddata = .\Show-TSxESDFiles.ps1 -Architecture amd64 -Version 25H2 -Language en-us -OSLicense Volume`
 	Queries the catalog for 64-bit (`amd64`) Windows `25H2`, language `en-us`, and `Volume` license media, then stores the matching result object(s) in `$esddata`.
-3. `$esdfile = .\Get-TSxESDDownload.ps1 -Url $esddata.FilePath -FileName C:\Temp\($esddata.FileName)`
+3. `$esdfile = .\Invoke-TSxESDDownload.ps1 -Url $esddata.FilePath -FileName C:\Temp\($esddata.FileName)`
 	Downloads the ESD from the URL in `FilePath` and saves it using the name from `FileName` under `C:\Temp`, then stores the download result in `$esdfile`.
 4. `.\Get-TSxESDInfo.ps1 -EsdPath $esdfile.DownloadedPath`
 	Reads the downloaded ESD and shows the available image indexes, names, and metadata.
