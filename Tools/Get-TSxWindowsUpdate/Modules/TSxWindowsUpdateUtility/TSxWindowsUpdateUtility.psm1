@@ -2,6 +2,8 @@ $functionFiles = @(
     'Start-TSxLog.ps1',
     'Write-TSxLog.ps1',
     'Add-TSxUiOutput.ps1',
+    'Test-TSxJobRunning.ps1',
+    'Stop-TSxActiveDownloadJob.ps1',
     'Get-TSxExecutionContext.ps1',
     'Save-TSxUiSettings.ps1',
     'Import-TSxUiSettings.ps1',

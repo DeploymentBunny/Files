@@ -1,6 +1,6 @@
 @{
-    RootModule = 'TSxLatestWindowsUpdateUtility.psm1'
-    ModuleVersion = '1.0.1'
+    RootModule = 'TSxWindowsUpdateUtility.psm1'
+    ModuleVersion = '1.0.2'
     GUID = '8ad1ac70-2994-4d62-9421-5f7ef98d25d9'
     Author = 'Mikael Nystrom'
     CompanyName = 'Deployment Bunny'

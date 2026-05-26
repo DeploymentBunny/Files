@@ -51,7 +51,7 @@
 
 .NOTES
 	FileName:    Get-TSxWindowsUpdateList.ps1
-	Version:     1.2.14
+	Version:     1.2.15
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
@@ -109,7 +109,7 @@ param(
 	[switch]$UiProgress
 )
 
-Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TSxWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'

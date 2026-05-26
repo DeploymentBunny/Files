@@ -26,7 +26,7 @@ function Write-TSxLog {
             $null = New-Item -Path $fallbackRoot -ItemType Directory -Force
         }
 
-        $LogFilePath = Join-Path -Path $fallbackRoot -ChildPath 'TSxLatestWindowsUpdateUtility.log'
+        $LogFilePath = Join-Path -Path $fallbackRoot -ChildPath 'TSxWindowsUpdateUtility.log'
         if (-not (Test-Path -Path $LogFilePath)) {
             $null = New-Item -Path $LogFilePath -ItemType File -Force
         }

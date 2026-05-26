@@ -15,7 +15,7 @@
 
 .NOTES
     FileName:    Add-TSxUpdatesToImageUI.ps1
-    Version:     1.0.1
+    Version:     1.0.3
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-26
@@ -39,7 +39,7 @@ param(
     [switch]$Force
 )
 
-Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TSxWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -62,109 +62,6 @@ $colorButtonText = [System.Drawing.ColorTranslator]::FromHtml('#1c1d1d')
 
 $script:OutputTextBox = $null
 
-function Add-TSxUiOutput {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-
-        [Parameter()]
-        [ValidateSet('INFO', 'WARN', 'ERROR', 'VERBOSE')]
-        [string]$Level = 'INFO'
-    )
-
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        return
-    }
-
-    $line = '[{0}] [{1}] {2}' -f (Get-Date -Format 'HH:mm:ss'), $Level, $Message
-    if ($script:OutputTextBox -and -not $script:OutputTextBox.IsDisposed) {
-        $script:OutputTextBox.AppendText($line + [Environment]::NewLine)
-        $script:OutputTextBox.SelectionStart = $script:OutputTextBox.TextLength
-        $script:OutputTextBox.ScrollToCaret()
-        [System.Windows.Forms.Application]::DoEvents()
-    }
-}
-
-function Save-UISettings {
-    param(
-        [Parameter()]
-        [AllowEmptyString()]
-        [string]$ImagePath,
-
-        [Parameter()]
-        [AllowEmptyString()]
-        [string]$UpdatePath,
-
-        [Parameter()]
-        [AllowEmptyString()]
-        [string]$ScratchDirectory,
-
-        [Parameter(Mandatory = $true)]
-        [int]$Index,
-
-        [Parameter(Mandatory = $true)]
-        [bool]$UseWhatIf
-    )
-
-    try {
-        if (-not (Test-Path -LiteralPath $script:SettingsDirectory -PathType Container)) {
-            New-Item -ItemType Directory -Path $script:SettingsDirectory -Force | Out-Null
-        }
-
-        $settings = [pscustomobject]@{
-            ImagePath        = $ImagePath
-            UpdatePath       = $UpdatePath
-            ScratchDirectory = $ScratchDirectory
-            Index            = $Index
-            UseWhatIf        = $UseWhatIf
-        }
-
-        $settings | ConvertTo-Json -Depth 5 | Out-File -LiteralPath $script:SettingsFile -Encoding UTF8
-        Write-TSxLog -Message ('Settings saved: {0}' -f $script:SettingsFile)
-    }
-    catch {
-        Write-TSxLog -Level 'WARN' -Message ('Failed to save settings. Error: {0}' -f $_.Exception.Message)
-    }
-}
-
-function Import-UISettings {
-    if (-not (Test-Path -LiteralPath $script:SettingsFile -PathType Leaf)) {
-        return $null
-    }
-
-    try {
-        $settings = Get-Content -LiteralPath $script:SettingsFile -Raw | ConvertFrom-Json
-        Write-TSxLog -Message ('Settings loaded: {0}' -f $script:SettingsFile)
-        return $settings
-    }
-    catch {
-        Write-TSxLog -Level 'WARN' -Message ('Failed to load settings. Error: {0}' -f $_.Exception.Message)
-        return $null
-    }
-}
-
-function Get-TSxDeploymentBunnyLogoImage {
-    $dedupUiPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Start-VIADeDupJob\Invoke-TSxDeDupJobUI.ps1'
-    if (-not (Test-Path -LiteralPath $dedupUiPath -PathType Leaf)) {
-        return $null
-    }
-
-    try {
-        $dedupUiContent = Get-Content -LiteralPath $dedupUiPath -Raw
-        $pictureStringMatch = [regex]::Match($dedupUiContent, '\$PictureString\s*=\s*"(?<data>[^"]+)"')
-        if (-not $pictureStringMatch.Success) {
-            return $null
-        }
-
-        $logoBytes = [Convert]::FromBase64String($pictureStringMatch.Groups['data'].Value)
-        $logoStream = New-Object System.IO.MemoryStream(,$logoBytes)
-        return [System.Drawing.Image]::FromStream($logoStream)
-    }
-    catch {
-        return $null
-    }
-}
-
 $scriptRoot = Split-Path -Path $PSCommandPath -Parent
 $patchScriptPath = Join-Path -Path $scriptRoot -ChildPath 'Add-TSxUpdatesToImage.ps1'
 
@@ -186,7 +83,7 @@ $form.Size = New-Object System.Drawing.Size(1180, 760)
 $form.MinimumSize = New-Object System.Drawing.Size(1000, 680)
 $form.BackColor = [System.Drawing.Color]::White
 
-$logoImage = Get-TSxDeploymentBunnyLogoImage
+$logoImage = Get-TSxDeploymentBunnyLogoImage -UiScriptRoot $PSScriptRoot
 if ($logoImage) {
     $pictureBox = New-Object System.Windows.Forms.PictureBox
     $pictureBox.Location = New-Object System.Drawing.Point(980, 2)
@@ -307,6 +204,7 @@ $textOutput.WordWrap = $false
 $textOutput.BackColor = [System.Drawing.Color]::White
 $textOutput.Font = $fontData
 $script:OutputTextBox = $textOutput
+$PSDefaultParameterValues['Add-TSxUiOutput:OutputTextBox'] = $script:OutputTextBox
 
 $statusBar = New-Object System.Windows.Forms.StatusStrip
 $statusBar.Dock = 'Bottom'
@@ -477,7 +375,7 @@ $buttonInject.Add_Click({
     }
 })
 
-$loadedSettings = Import-UISettings
+$loadedSettings = Import-TSxUiSettings -SettingsFile $script:SettingsFile
 if ($loadedSettings) {
     if (-not [string]::IsNullOrWhiteSpace([string]$loadedSettings.ImagePath)) {
         $textImage.Text = [string]$loadedSettings.ImagePath
@@ -509,7 +407,14 @@ if ($loadedSettings) {
 
 $form.Add_FormClosing({
     try {
-        Save-UISettings -ImagePath $textImage.Text.Trim() -UpdatePath $textUpdatePath.Text.Trim() -ScratchDirectory $textScratch.Text.Trim() -Index ([int]$numericIndex.Value) -UseWhatIf $checkWhatIf.Checked
+        $settings = [pscustomobject]@{
+            ImagePath        = $textImage.Text.Trim()
+            UpdatePath       = $textUpdatePath.Text.Trim()
+            ScratchDirectory = $textScratch.Text.Trim()
+            Index            = [int]$numericIndex.Value
+            UseWhatIf        = $checkWhatIf.Checked
+        }
+        Save-TSxUiSettings -SettingsDirectory $script:SettingsDirectory -SettingsFile $script:SettingsFile -Settings $settings
     }
     catch {
         Write-TSxLog -Level 'WARN' -Message ('Failed to persist UI settings during close. Error: {0}' -f $_.Exception.Message)

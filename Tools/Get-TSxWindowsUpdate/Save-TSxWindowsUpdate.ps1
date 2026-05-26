@@ -30,7 +30,7 @@
 
 .NOTES
     FileName:    Save-TSxWindowsUpdate.ps1
-    Version:     1.2.21
+    Version:     1.2.22
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
@@ -76,7 +76,7 @@ $ErrorActionPreference = 'Stop'
 $script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate'
 $script:LogFilePath = Join-Path -Path $script:LogRootPath -ChildPath ('{0}.log' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
 
-Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TSxWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 $scriptName = Split-Path -Path $PSCommandPath -Leaf
 Start-TSxLog -FilePath $script:LogFilePath -Force:$Force

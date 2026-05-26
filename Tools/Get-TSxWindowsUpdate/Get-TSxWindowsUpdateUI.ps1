@@ -15,7 +15,7 @@
 
 .NOTES
     FileName:    Get-TSxWindowsUpdateUI.ps1
-    Version:     1.2.42
+    Version:     1.2.44
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
@@ -39,7 +39,7 @@ param(
     [switch]$Force
 )
 
-Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TSxWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -64,37 +64,6 @@ $script:OutputTextBox = $null
 $script:IsApplyingGridRowStyles = $false
 $script:ActiveDownloadJob = $null
 $script:CancelDownloadRequested = $false
-
-function Test-TSxJobRunning {
-    param(
-        [Parameter()]
-        [object]$JobCandidate
-    )
-
-    if ($null -eq $JobCandidate) {
-        return $false
-    }
-
-    if (-not ($JobCandidate -is [System.Management.Automation.Job])) {
-        return $false
-    }
-
-    try {
-        return @('Running', 'NotStarted') -contains [string]$JobCandidate.State
-    }
-    catch {
-        return $false
-    }
-}
-
-function Stop-TSxActiveDownloadJob {
-    if ($script:ActiveDownloadJob -is [System.Management.Automation.Job]) {
-        Stop-Job -Job $script:ActiveDownloadJob -ErrorAction SilentlyContinue
-        Remove-Job -Job $script:ActiveDownloadJob -Force -ErrorAction SilentlyContinue
-    }
-
-    $script:ActiveDownloadJob = $null
-}
 
 $scriptRoot = Split-Path -Path $PSCommandPath -Parent
 $listScriptPath = Join-Path -Path $scriptRoot -ChildPath 'Get-TSxWindowsUpdateList.ps1'
@@ -892,7 +861,7 @@ $buttonDownload.Add_Click({
                         }
                     }
                     finally {
-                        Stop-TSxActiveDownloadJob
+                        $script:ActiveDownloadJob = Stop-TSxActiveDownloadJob -JobCandidate $script:ActiveDownloadJob
                         $ProgressPreference = $previousProgressPreference
                     }
                     [System.Windows.Forms.Application]::DoEvents()
@@ -928,7 +897,7 @@ $buttonDownload.Add_Click({
             [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Download Failed', 'OK', 'Error') | Out-Null
         }
         finally {
-            Stop-TSxActiveDownloadJob
+            $script:ActiveDownloadJob = Stop-TSxActiveDownloadJob -JobCandidate $script:ActiveDownloadJob
             $buttonAbort.Enabled = $false
             $buttonDownload.Enabled = $true
             $buttonSearch.Enabled = $true
@@ -969,7 +938,7 @@ if ($loadedSettings) {
 }
 
 $form.Add_FormClosing({
-    Stop-TSxActiveDownloadJob
+    $script:ActiveDownloadJob = Stop-TSxActiveDownloadJob -JobCandidate $script:ActiveDownloadJob
 
     Save-TSxUiSettings -SettingsDirectory $script:SettingsDirectory -SettingsFile $script:SettingsFile -Settings ([pscustomobject]@{
             OperatingSystem   = $textOS.Text.Trim()

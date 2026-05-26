@@ -2,7 +2,7 @@
 
 Toolset to search and download the latest Windows cumulative updates from Microsoft Update Catalog.
 
-The scripts use the shared module in `Modules/TSxLatestWindowsUpdateUtility` for parsing, logging,
+The scripts use the shared module in `Modules/TSxWindowsUpdateUtility` for parsing, logging,
 download logic, and host execution-context detection (`Wrapper`, `ISE`, `CommandLine`).
 
 ## Included scripts

@@ -27,7 +27,7 @@
 
 .NOTES
 	FileName:    Add-TSxUpdatesToImage.ps1
-	Version:     1.0.3
+	Version:     1.0.4
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
@@ -61,7 +61,7 @@ param(
 	[string]$ScratchDirectory
 )
 
-Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
+Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TSxWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
