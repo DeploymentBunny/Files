@@ -14,7 +14,10 @@ function Invoke-TSxDownloadJob {
         [bool]$UseWhatIf = $false,
 
         [Parameter()]
-        [bool]$UseForce = $false
+        [bool]$UseForce = $false,
+
+        [Parameter()]
+        [bool]$UseVerbose = $false
     )
 
     $job = Start-Job -ScriptBlock {
@@ -23,11 +26,12 @@ function Invoke-TSxDownloadJob {
             [psobject]$SelectedUpdate,
             [string]$DownloadPath,
             [bool]$UseWhatIf,
-            [bool]$UseForce
+            [bool]$UseForce,
+            [bool]$UseVerbose
         )
 
-        $SelectedUpdate | & $DownloadScriptPath -Path $DownloadPath -WhatIf:$UseWhatIf -Force:$UseForce -Verbose 4>&1 6>&1
-    } -ArgumentList $DownloadScriptPath, $SelectedUpdate, $DownloadPath, $UseWhatIf, $UseForce
+        $SelectedUpdate | & $DownloadScriptPath -Path $DownloadPath -WhatIf:$UseWhatIf -Force:$UseForce -Verbose:$UseVerbose 4>&1 6>&1
+    } -ArgumentList $DownloadScriptPath, $SelectedUpdate, $DownloadPath, $UseWhatIf, $UseForce, $UseVerbose
 
     try {
         while ($job.State -eq 'Running' -or $job.State -eq 'NotStarted') {

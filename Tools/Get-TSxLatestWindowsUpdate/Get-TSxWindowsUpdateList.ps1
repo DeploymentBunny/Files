@@ -34,9 +34,6 @@
 .PARAMETER IncludePreview
 	Include preview updates. Default behavior excludes previews.
 
-.PARAMETER IncludeInsider
-	Include Windows Insider pre-release updates. Default behavior excludes Insider updates.
-
 .PARAMETER Force
 	Recreates log file content for the current execution.
 
@@ -48,11 +45,11 @@
 
 .NOTES
 	FileName:    Get-TSxWindowsUpdateList.ps1
-	Version:     1.2.5
+	Version:     1.2.8
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
-	Updated:     2026-05-25
+	Updated:     2026-05-26
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -97,9 +94,6 @@ param(
 	[switch]$IncludePreview,
 
 	[Parameter()]
-	[switch]$IncludeInsider,
-
-	[Parameter()]
 	[switch]$Force
 )
 
@@ -117,7 +111,6 @@ if ($PSBoundParameters.ContainsKey('IncludeSSU')) { $script:IncludeSSUEffective 
 if ($PSBoundParameters.ContainsKey('IncludeDefender')) { $script:IncludeDefenderEffective = [bool]$IncludeDefender } else { $script:IncludeDefenderEffective = $false }
 if ($PSBoundParameters.ContainsKey('IncludeEdge')) { $script:IncludeEdgeEffective = [bool]$IncludeEdge } else { $script:IncludeEdgeEffective = $false }
 if ($PSBoundParameters.ContainsKey('IncludePreview')) { $script:IncludePreviewEffective = [bool]$IncludePreview } else { $script:IncludePreviewEffective = $false }
-if ($PSBoundParameters.ContainsKey('IncludeInsider')) { $script:IncludeInsiderEffective = [bool]$IncludeInsider } else { $script:IncludeInsiderEffective = $false }
 
 $scriptName = Split-Path -Path $PSCommandPath -Leaf
 Start-TSxLog -FilePath $script:LogFilePath -Force:$Force
@@ -136,12 +129,11 @@ Write-TSxLog -Message ('IncludeSSU: {0}' -f $script:IncludeSSUEffective)
 Write-TSxLog -Message ('IncludeDefender: {0}' -f $script:IncludeDefenderEffective)
 Write-TSxLog -Message ('IncludeEdge: {0}' -f $script:IncludeEdgeEffective)
 Write-TSxLog -Message ('IncludePreview: {0}' -f $script:IncludePreviewEffective)
-Write-TSxLog -Message ('IncludeInsider: {0}' -f $script:IncludeInsiderEffective)
 Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
 Write-TSxLog -Message ('Log root path: {0}' -f $script:LogRootPath)
 Write-TSxLog -Message ('Log path: {0}' -f $script:LogFilePath)
 
-if (-not ($script:IncludeCumulativeEffective -or $script:IncludeDotNetEffective -or $script:IncludeSSUEffective -or $script:IncludeDefenderEffective -or $script:IncludeEdgeEffective)) {
+if (-not ($script:IncludeCumulativeEffective -or $script:IncludeDotNetEffective -or $script:IncludeSSUEffective -or $script:IncludeDefenderEffective -or $script:IncludeEdgeEffective -or $script:IncludePreviewEffective)) {
 	throw 'No update categories selected. Enable at least one category switch.'
 }
 
@@ -167,11 +159,17 @@ if ($script:IncludeEdgeEffective) {
 	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Edge' -Query 'Microsoft Edge Stable' -IncludePatterns @('(?i)Edge') -RequiresOperatingSystemMatch:$false))
 }
 
+if ($script:IncludePreviewEffective) {
+	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Preview' -Query '{0} {1} preview cumulative update' -IncludePatterns @('(?i)Preview') -ExcludePatterns @('(?i)Windows Insider', '(?i)Insider Pre-Release')))
+}
+
 $outputUpdates = New-Object System.Collections.Generic.List[object]
 $seenUpdateIds = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
 
 foreach ($categoryDefinition in $categoryDefinitions) {
 	$searchQuery = $categoryDefinition.Query -f $OperatingSystem, $Architecture
+	Write-TSxLog -Message ('Query for {0}: {1}' -f $categoryDefinition.Name, $searchQuery)
+	Write-Verbose ('Query for {0}: {1}' -f $categoryDefinition.Name, $searchQuery)
 	if ($PSCmdlet.ShouldProcess($searchQuery, ('Query Windows Update Catalog for {0}' -f $categoryDefinition.Name))) {
 		$searchResults = @(Get-TSxCatalogSearchResults -Query $searchQuery)
 	}
@@ -200,8 +198,7 @@ foreach ($categoryDefinition in $categoryDefinitions) {
 		$matchesOperatingSystem = (-not $requiresOperatingSystemMatch) -or (Test-TSxOperatingSystemMatch -Title $_.Title -Product $_.Product -OperatingSystem $OperatingSystem)
 		$matchesPreviewRule = $script:IncludePreviewEffective -or ($_.Title -notmatch '(?i)Preview')
 		$isInsiderUpdate = $_.Title -match '(?i)Windows Insider|Insider Pre-Release' -or $_.Product -match '(?i)Windows Insider|Insider Pre-Release'
-		$matchesInsiderRule = $script:IncludeInsiderEffective -or (-not $isInsiderUpdate)
-		$matchesCategory -and $matchesArchitecture -and $matchesOperatingSystem -and $matchesPreviewRule -and $matchesInsiderRule
+		$matchesCategory -and $matchesArchitecture -and $matchesOperatingSystem -and $matchesPreviewRule -and (-not $isInsiderUpdate)
 	}
 
 	if (-not $candidateUpdates) {

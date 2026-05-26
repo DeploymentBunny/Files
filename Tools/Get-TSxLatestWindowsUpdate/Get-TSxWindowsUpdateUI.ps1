@@ -15,11 +15,11 @@
 
 .NOTES
     FileName:    Get-TSxWindowsUpdateUI.ps1
-    Version:     1.2.18
+    Version:     1.2.24
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
-    Updated:     2026-05-25
+    Updated:     2026-05-26
     Twitter:     @mikael_nystrom
 
     Disclaimer:
@@ -118,7 +118,7 @@ function Save-UISettings {
         [bool]$IncludePreview,
 
         [Parameter(Mandatory = $true)]
-        [bool]$IncludeInsider
+        [bool]$VerboseEnabled
     )
 
     try {
@@ -137,7 +137,7 @@ function Save-UISettings {
             IncludeDefender = $IncludeDefender
             IncludeEdge     = $IncludeEdge
             IncludePreview  = $IncludePreview
-            IncludeInsider  = $IncludeInsider
+            Verbose         = $VerboseEnabled
         }
 
         $settings | ConvertTo-Json -Depth 5 | Out-File -LiteralPath $Script:SettingsFile -Encoding UTF8
@@ -286,6 +286,14 @@ $checkForce.Checked = $Force.IsPresent
 $checkForce.Font = $fontMain
 $checkForce.BackColor = [System.Drawing.Color]::White
 
+$checkVerbose = New-Object System.Windows.Forms.CheckBox
+$checkVerbose.Location = New-Object System.Drawing.Point(492, 70)
+$checkVerbose.Size = New-Object System.Drawing.Size(130, 20)
+$checkVerbose.Text = 'Verbose output'
+$checkVerbose.Checked = $false
+$checkVerbose.Font = $fontMain
+$checkVerbose.BackColor = [System.Drawing.Color]::White
+
 $checkIncludeCumulative = New-Object System.Windows.Forms.CheckBox
 $checkIncludeCumulative.Location = New-Object System.Drawing.Point(12, 70)
 $checkIncludeCumulative.Size = New-Object System.Drawing.Size(150, 20)
@@ -311,7 +319,7 @@ $checkIncludeSSU.Font = $fontMain
 $checkIncludeSSU.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDefender = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDefender.Location = New-Object System.Drawing.Point(492, 70)
+$checkIncludeDefender.Location = New-Object System.Drawing.Point(332, 92)
 $checkIncludeDefender.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeDefender.Text = 'Include Defender'
 $checkIncludeDefender.Checked = $false
@@ -333,14 +341,6 @@ $checkIncludePreview.Text = 'Include Preview'
 $checkIncludePreview.Checked = $false
 $checkIncludePreview.Font = $fontMain
 $checkIncludePreview.BackColor = [System.Drawing.Color]::White
-
-$checkIncludeInsider = New-Object System.Windows.Forms.CheckBox
-$checkIncludeInsider.Location = New-Object System.Drawing.Point(332, 92)
-$checkIncludeInsider.Size = New-Object System.Drawing.Size(150, 20)
-$checkIncludeInsider.Text = 'Include Insider'
-$checkIncludeInsider.Checked = $false
-$checkIncludeInsider.Font = $fontMain
-$checkIncludeInsider.BackColor = [System.Drawing.Color]::White
 
 $labelPath = New-Object System.Windows.Forms.Label
 $labelPath.Location = New-Object System.Drawing.Point(12, 48)
@@ -482,6 +482,7 @@ $statusLabel.Font = $fontHeading
 [void]$form.Controls.Add($buttonSelectAll)
 [void]$form.Controls.Add($buttonClearSelection)
 [void]$form.Controls.Add($checkForce)
+[void]$form.Controls.Add($checkVerbose)
 [void]$form.Controls.Add($labelPath)
 [void]$form.Controls.Add($textPath)
 [void]$form.Controls.Add($buttonBrowse)
@@ -492,7 +493,6 @@ $statusLabel.Font = $fontHeading
 [void]$form.Controls.Add($checkIncludeDefender)
 [void]$form.Controls.Add($checkIncludeEdge)
 [void]$form.Controls.Add($checkIncludePreview)
-[void]$form.Controls.Add($checkIncludeInsider)
 [void]$form.Controls.Add($progressDownloads)
 [void]$form.Controls.Add($splitMain)
 [void]$form.Controls.Add($statusBar)
@@ -533,7 +533,7 @@ $buttonSearch.Add_Click({
                 return
             }
 
-            if (-not ($checkIncludeCumulative.Checked -or $checkIncludeDotNet.Checked -or $checkIncludeSSU.Checked -or $checkIncludeDefender.Checked -or $checkIncludeEdge.Checked)) {
+            if (-not ($checkIncludeCumulative.Checked -or $checkIncludeDotNet.Checked -or $checkIncludeSSU.Checked -or $checkIncludeDefender.Checked -or $checkIncludeEdge.Checked -or $checkIncludePreview.Checked)) {
                 [System.Windows.Forms.MessageBox]::Show('Select at least one update category.', 'Validation', 'OK', 'Warning') | Out-Null
                 return
             }
@@ -543,7 +543,7 @@ $buttonSearch.Add_Click({
             Write-TSxLog -Message ('Searching updates for {0} ({1})' -f $osText, $architecture)
             Add-TSxUiOutput -Message ('Searching updates for {0} ({1})' -f $osText, $architecture)
 
-            $searchOutput = @(& $listScriptPath -OperatingSystem $osText -Architecture $architecture -Force:$checkForce.Checked -IncludeCumulative:$checkIncludeCumulative.Checked -IncludeDotNet:$checkIncludeDotNet.Checked -IncludeSSU:$checkIncludeSSU.Checked -IncludeDefender:$checkIncludeDefender.Checked -IncludeEdge:$checkIncludeEdge.Checked -IncludePreview:$checkIncludePreview.Checked -IncludeInsider:$checkIncludeInsider.Checked -Verbose 4>&1)
+            $searchOutput = @(& $listScriptPath -OperatingSystem $osText -Architecture $architecture -Force:$checkForce.Checked -IncludeCumulative:$checkIncludeCumulative.Checked -IncludeDotNet:$checkIncludeDotNet.Checked -IncludeSSU:$checkIncludeSSU.Checked -IncludeDefender:$checkIncludeDefender.Checked -IncludeEdge:$checkIncludeEdge.Checked -IncludePreview:$checkIncludePreview.Checked -Verbose:$checkVerbose.Checked 4>&1)
             $updates = @()
             foreach ($outputItem in $searchOutput) {
                 if ($outputItem -is [System.Management.Automation.VerboseRecord]) {
@@ -657,7 +657,7 @@ $buttonDownload.Add_Click({
                     $progressDownloads.MarqueeAnimationSpeed = 25
                     [System.Windows.Forms.Application]::DoEvents()
 
-                    $singleDownloadOutput = @(Invoke-TSxDownloadJob -DownloadScriptPath $downloadScriptPath -SelectedUpdate $selectedUpdate -DownloadPath $downloadPath -UseWhatIf:$false -UseForce $checkForce.Checked)
+                    $singleDownloadOutput = @(Invoke-TSxDownloadJob -DownloadScriptPath $downloadScriptPath -SelectedUpdate $selectedUpdate -DownloadPath $downloadPath -UseWhatIf:$false -UseForce $checkForce.Checked -UseVerbose:$checkVerbose.Checked)
                     foreach ($outputItem in $singleDownloadOutput) {
                         if ($outputItem -is [System.Management.Automation.VerboseRecord]) {
                             Write-TSxLog -Message $outputItem.Message
@@ -729,11 +729,13 @@ if ($loadedSettings) {
     if ($null -ne $loadedSettings.IncludeDefender) { $checkIncludeDefender.Checked = [bool]$loadedSettings.IncludeDefender }
     if ($null -ne $loadedSettings.IncludeEdge) { $checkIncludeEdge.Checked = [bool]$loadedSettings.IncludeEdge }
     if ($null -ne $loadedSettings.IncludePreview) { $checkIncludePreview.Checked = [bool]$loadedSettings.IncludePreview }
-    if ($null -ne $loadedSettings.IncludeInsider) { $checkIncludeInsider.Checked = [bool]$loadedSettings.IncludeInsider }
+    if ($loadedSettings.PSObject.Properties.Name -contains 'Verbose' -and $null -ne $loadedSettings.Verbose) {
+        $checkVerbose.Checked = [bool]$loadedSettings.Verbose
+    }
 }
 
 $form.Add_FormClosing({
-    Save-UISettings -OperatingSystem $textOS.Text.Trim() -Architecture ([string]$comboArchitecture.SelectedItem) -DownloadPath $textPath.Text.Trim() -Force $checkForce.Checked -IncludeCumulative $checkIncludeCumulative.Checked -IncludeDotNet $checkIncludeDotNet.Checked -IncludeSSU $checkIncludeSSU.Checked -IncludeDefender $checkIncludeDefender.Checked -IncludeEdge $checkIncludeEdge.Checked -IncludePreview $checkIncludePreview.Checked -IncludeInsider $checkIncludeInsider.Checked
+    Save-UISettings -OperatingSystem $textOS.Text.Trim() -Architecture ([string]$comboArchitecture.SelectedItem) -DownloadPath $textPath.Text.Trim() -Force $checkForce.Checked -IncludeCumulative $checkIncludeCumulative.Checked -IncludeDotNet $checkIncludeDotNet.Checked -IncludeSSU $checkIncludeSSU.Checked -IncludeDefender $checkIncludeDefender.Checked -IncludeEdge $checkIncludeEdge.Checked -IncludePreview $checkIncludePreview.Checked -VerboseEnabled $checkVerbose.Checked
     })
 
 [void]$form.ShowDialog()
