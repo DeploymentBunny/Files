@@ -15,7 +15,7 @@
 
 .NOTES
     FileName:    Get-TSxWindowsUpdateUI.ps1
-    Version:     1.2.16
+    Version:     1.2.18
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
@@ -279,8 +279,8 @@ $buttonClearSelection.BackColor = $colorSecondaryButton
 $buttonClearSelection.ForeColor = $colorButtonText
 
 $checkForce = New-Object System.Windows.Forms.CheckBox
-$checkForce.Location = New-Object System.Drawing.Point(414, 92)
-$checkForce.Size = New-Object System.Drawing.Size(130, 20)
+$checkForce.Location = New-Object System.Drawing.Point(492, 92)
+$checkForce.Size = New-Object System.Drawing.Size(150, 20)
 $checkForce.Text = 'Force overwrite'
 $checkForce.Checked = $Force.IsPresent
 $checkForce.Font = $fontMain
@@ -288,31 +288,31 @@ $checkForce.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeCumulative = New-Object System.Windows.Forms.CheckBox
 $checkIncludeCumulative.Location = New-Object System.Drawing.Point(12, 70)
-$checkIncludeCumulative.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeCumulative.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeCumulative.Text = 'Include LCU'
 $checkIncludeCumulative.Checked = $true
 $checkIncludeCumulative.Font = $fontMain
 $checkIncludeCumulative.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDotNet = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDotNet.Location = New-Object System.Drawing.Point(146, 70)
-$checkIncludeDotNet.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeDotNet.Location = New-Object System.Drawing.Point(172, 70)
+$checkIncludeDotNet.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeDotNet.Text = 'Include .NET CU'
 $checkIncludeDotNet.Checked = $true
 $checkIncludeDotNet.Font = $fontMain
 $checkIncludeDotNet.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeSSU = New-Object System.Windows.Forms.CheckBox
-$checkIncludeSSU.Location = New-Object System.Drawing.Point(280, 70)
-$checkIncludeSSU.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeSSU.Location = New-Object System.Drawing.Point(332, 70)
+$checkIncludeSSU.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeSSU.Text = 'Include SSU'
 $checkIncludeSSU.Checked = $true
 $checkIncludeSSU.Font = $fontMain
 $checkIncludeSSU.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeDefender = New-Object System.Windows.Forms.CheckBox
-$checkIncludeDefender.Location = New-Object System.Drawing.Point(414, 70)
-$checkIncludeDefender.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeDefender.Location = New-Object System.Drawing.Point(492, 70)
+$checkIncludeDefender.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeDefender.Text = 'Include Defender'
 $checkIncludeDefender.Checked = $false
 $checkIncludeDefender.Font = $fontMain
@@ -320,23 +320,23 @@ $checkIncludeDefender.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeEdge = New-Object System.Windows.Forms.CheckBox
 $checkIncludeEdge.Location = New-Object System.Drawing.Point(12, 92)
-$checkIncludeEdge.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeEdge.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeEdge.Text = 'Include Edge'
 $checkIncludeEdge.Checked = $false
 $checkIncludeEdge.Font = $fontMain
 $checkIncludeEdge.BackColor = [System.Drawing.Color]::White
 
 $checkIncludePreview = New-Object System.Windows.Forms.CheckBox
-$checkIncludePreview.Location = New-Object System.Drawing.Point(146, 92)
-$checkIncludePreview.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludePreview.Location = New-Object System.Drawing.Point(172, 92)
+$checkIncludePreview.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludePreview.Text = 'Include Preview'
 $checkIncludePreview.Checked = $false
 $checkIncludePreview.Font = $fontMain
 $checkIncludePreview.BackColor = [System.Drawing.Color]::White
 
 $checkIncludeInsider = New-Object System.Windows.Forms.CheckBox
-$checkIncludeInsider.Location = New-Object System.Drawing.Point(280, 92)
-$checkIncludeInsider.Size = New-Object System.Drawing.Size(130, 20)
+$checkIncludeInsider.Location = New-Object System.Drawing.Point(332, 92)
+$checkIncludeInsider.Size = New-Object System.Drawing.Size(150, 20)
 $checkIncludeInsider.Text = 'Include Insider'
 $checkIncludeInsider.Checked = $false
 $checkIncludeInsider.Font = $fontMain
@@ -351,7 +351,7 @@ $labelPath.BackColor = [System.Drawing.Color]::White
 
 $textPath = New-Object System.Windows.Forms.TextBox
 $textPath.Location = New-Object System.Drawing.Point(166, 44)
-$textPath.Size = New-Object System.Drawing.Size(320, 23)
+$textPath.Size = New-Object System.Drawing.Size(524, 23)
 $textPath.Text = (Join-Path -Path $env:TEMP -ChildPath 'TSxCatalogDownloads')
 $textPath.Font = $fontMain
 

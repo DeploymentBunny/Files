@@ -11,13 +11,21 @@ function Get-TSxCategoryDefinition {
         [string[]]$IncludePatterns,
 
         [Parameter()]
-        [string[]]$ExcludePatterns = @()
+        [string[]]$ExcludePatterns = @(),
+
+        [Parameter()]
+        [bool]$RequiresOperatingSystemMatch = $true,
+
+        [Parameter()]
+        [bool]$RequiresArchitectureMatch = $true
     )
 
     return [pscustomobject]@{
-        Name            = $Name
-        Query           = $Query
-        IncludePatterns = $IncludePatterns
-        ExcludePatterns = $ExcludePatterns
+        Name                         = $Name
+        Query                        = $Query
+        IncludePatterns              = $IncludePatterns
+        ExcludePatterns              = $ExcludePatterns
+        RequiresOperatingSystemMatch = $RequiresOperatingSystemMatch
+        RequiresArchitectureMatch    = $RequiresArchitectureMatch
     }
 }

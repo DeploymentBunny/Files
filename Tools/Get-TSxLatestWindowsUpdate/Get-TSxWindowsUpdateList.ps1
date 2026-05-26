@@ -48,7 +48,7 @@
 
 .NOTES
 	FileName:    Get-TSxWindowsUpdateList.ps1
-	Version:     1.2.4
+	Version:     1.2.5
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
@@ -160,11 +160,11 @@ if ($script:IncludeSSUEffective) {
 }
 
 if ($script:IncludeDefenderEffective) {
-	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Defender' -Query '{0} {1} defender update' -IncludePatterns @('(?i)Defender', '(?i)Security Intelligence Update')))
+	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Defender' -Query 'Windows Defender' -IncludePatterns @('(?i)Defender', '(?i)Security Intelligence Update', '(?i)Antimalware Platform Update') -RequiresOperatingSystemMatch:$false -RequiresArchitectureMatch:$false))
 }
 
 if ($script:IncludeEdgeEffective) {
-	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Edge' -Query '{0} {1} Edge Stable' -IncludePatterns @('(?i)Edge')))
+	$null = $categoryDefinitions.Add((Get-TSxCategoryDefinition -Name 'Edge' -Query 'Microsoft Edge Stable' -IncludePatterns @('(?i)Edge') -RequiresOperatingSystemMatch:$false))
 }
 
 $outputUpdates = New-Object System.Collections.Generic.List[object]
@@ -188,8 +188,16 @@ foreach ($categoryDefinition in $categoryDefinitions) {
 
 	$candidateUpdates = $searchResults | Where-Object {
 		$matchesCategory = Test-TSxTitlePatternMatch -Title $_.Title -IncludePatterns $categoryDefinition.IncludePatterns -ExcludePatterns $categoryDefinition.ExcludePatterns
-		$matchesArchitecture = $_.Title -match ('(?i){0}' -f [regex]::Escape($Architecture))
-		$matchesOperatingSystem = Test-TSxOperatingSystemMatch -Title $_.Title -Product $_.Product -OperatingSystem $OperatingSystem
+		$requiresArchitectureMatch = $true
+		if ($categoryDefinition.PSObject.Properties['RequiresArchitectureMatch']) {
+			$requiresArchitectureMatch = [bool]$categoryDefinition.RequiresArchitectureMatch
+		}
+		$matchesArchitecture = (-not $requiresArchitectureMatch) -or ($_.Title -match ('(?i){0}' -f [regex]::Escape($Architecture)))
+		$requiresOperatingSystemMatch = $true
+		if ($categoryDefinition.PSObject.Properties['RequiresOperatingSystemMatch']) {
+			$requiresOperatingSystemMatch = [bool]$categoryDefinition.RequiresOperatingSystemMatch
+		}
+		$matchesOperatingSystem = (-not $requiresOperatingSystemMatch) -or (Test-TSxOperatingSystemMatch -Title $_.Title -Product $_.Product -OperatingSystem $OperatingSystem)
 		$matchesPreviewRule = $script:IncludePreviewEffective -or ($_.Title -notmatch '(?i)Preview')
 		$isInsiderUpdate = $_.Title -match '(?i)Windows Insider|Insider Pre-Release' -or $_.Product -match '(?i)Windows Insider|Insider Pre-Release'
 		$matchesInsiderRule = $script:IncludeInsiderEffective -or (-not $isInsiderUpdate)
