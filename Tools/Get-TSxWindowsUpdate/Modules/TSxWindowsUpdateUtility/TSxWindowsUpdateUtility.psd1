@@ -10,5 +10,5 @@
     CmdletsToExport = @()
     VariablesToExport = @()
     AliasesToExport = @()
-    Description = 'Shared utility functions for TSx Latest Windows Update tooling, including logging, catalog parsing, download orchestration, and execution-context detection.'
+    Description = 'Shared utility functions for TSx Windows Update tooling, including logging, catalog parsing, download orchestration, and execution-context detection.'
 }
