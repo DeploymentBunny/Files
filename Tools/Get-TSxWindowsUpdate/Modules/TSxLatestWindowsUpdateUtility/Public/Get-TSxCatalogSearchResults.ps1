@@ -13,7 +13,14 @@ function Get-TSxCatalogSearchResults {
 
     Write-TSxLog -Message ('Searching Windows Update Catalog: {0}' -f $searchUri)
 
-    $response = Invoke-WebRequest -UseBasicParsing -Uri $searchUri
+    $previousProgressPreference = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri $searchUri
+    }
+    finally {
+        $ProgressPreference = $previousProgressPreference
+    }
     $rowPattern = [regex]::new('<tr id="(?<UpdateId>[0-9a-f-]+)_R\d+"[^>]*>(?<RowHtml>.*?)</tr>', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)
     $resultRowMatch = $rowPattern.Match($response.Content)
 

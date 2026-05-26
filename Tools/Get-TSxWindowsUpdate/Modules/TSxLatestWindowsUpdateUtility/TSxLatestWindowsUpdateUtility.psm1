@@ -1,8 +1,12 @@
 $functionFiles = @(
     'Start-TSxLog.ps1',
     'Write-TSxLog.ps1',
+    'Add-TSxUiOutput.ps1',
+    'Get-TSxExecutionContext.ps1',
+    'Save-TSxUiSettings.ps1',
+    'Import-TSxUiSettings.ps1',
+    'Get-TSxDeploymentBunnyLogoImage.ps1',
     'Get-TSxDefaultArchitecture.ps1',
-    'Invoke-TSxDownloadJob.ps1',
     'ConvertFrom-TSxHtml.ps1',
     'ConvertTo-TSxNormalizedText.ps1',
     'Test-TSxOperatingSystemMatch.ps1',

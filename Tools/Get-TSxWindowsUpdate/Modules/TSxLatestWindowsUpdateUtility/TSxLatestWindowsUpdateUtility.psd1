@@ -1,6 +1,6 @@
 @{
     RootModule = 'TSxLatestWindowsUpdateUtility.psm1'
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '1.0.1'
     GUID = '8ad1ac70-2994-4d62-9421-5f7ef98d25d9'
     Author = 'Mikael Nystrom'
     CompanyName = 'Deployment Bunny'
@@ -10,5 +10,5 @@
     CmdletsToExport = @()
     VariablesToExport = @()
     AliasesToExport = @()
-    Description = 'Shared utility functions for the TSx Latest Windows Update tooling.'
+    Description = 'Shared utility functions for TSx Latest Windows Update tooling, including logging, catalog parsing, download orchestration, and execution-context detection.'
 }

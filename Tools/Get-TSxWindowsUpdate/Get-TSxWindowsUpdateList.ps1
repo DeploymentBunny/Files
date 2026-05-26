@@ -37,6 +37,12 @@
 .PARAMETER Force
 	Recreates log file content for the current execution.
 
+.PARAMETER NoProgress
+	Suppresses progress output.
+
+.PARAMETER UiProgress
+	Emits progress updates as information records for UI wrappers.
+
 .EXAMPLE
 	.\Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -Architecture x64 -LatestOnly -Verbose
 
@@ -45,7 +51,7 @@
 
 .NOTES
 	FileName:    Get-TSxWindowsUpdateList.ps1
-	Version:     1.2.8
+	Version:     1.2.14
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
@@ -94,7 +100,13 @@ param(
 	[switch]$IncludePreview,
 
 	[Parameter()]
-	[switch]$Force
+	[switch]$Force,
+
+	[Parameter()]
+	[switch]$NoProgress,
+
+	[Parameter()]
+	[switch]$UiProgress
 )
 
 Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxLatestWindowsUpdateUtility\TSxLatestWindowsUpdateUtility.psd1') -Force -ErrorAction Stop
@@ -130,6 +142,8 @@ Write-TSxLog -Message ('IncludeDefender: {0}' -f $script:IncludeDefenderEffectiv
 Write-TSxLog -Message ('IncludeEdge: {0}' -f $script:IncludeEdgeEffective)
 Write-TSxLog -Message ('IncludePreview: {0}' -f $script:IncludePreviewEffective)
 Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
+Write-TSxLog -Message ('NoProgress: {0}' -f $NoProgress.IsPresent)
+Write-TSxLog -Message ('UiProgress: {0}' -f $UiProgress.IsPresent)
 Write-TSxLog -Message ('Log root path: {0}' -f $script:LogRootPath)
 Write-TSxLog -Message ('Log path: {0}' -f $script:LogFilePath)
 
@@ -165,63 +179,104 @@ if ($script:IncludePreviewEffective) {
 
 $outputUpdates = New-Object System.Collections.Generic.List[object]
 $seenUpdateIds = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+$progressId = 22001
+$categoryCount = [Math]::Max(1, $categoryDefinitions.Count)
+$categoryIndex = 0
+$showProgress = -not $NoProgress
+$tsxExecutionContext = Get-TSxExecutionContext
+$emitUiProgress = [bool]($UiProgress -or $tsxExecutionContext -eq 'Wrapper')
+$isIseHost = $tsxExecutionContext -eq 'ISE'
+$previousProgressPreference = $ProgressPreference
+$previousInformationPreference = $InformationPreference
 
-foreach ($categoryDefinition in $categoryDefinitions) {
-	$searchQuery = $categoryDefinition.Query -f $OperatingSystem, $Architecture
-	Write-TSxLog -Message ('Query for {0}: {1}' -f $categoryDefinition.Name, $searchQuery)
-	Write-Verbose ('Query for {0}: {1}' -f $categoryDefinition.Name, $searchQuery)
-	if ($PSCmdlet.ShouldProcess($searchQuery, ('Query Windows Update Catalog for {0}' -f $categoryDefinition.Name))) {
-		$searchResults = @(Get-TSxCatalogSearchResults -Query $searchQuery)
-	}
-	else {
-		$searchResults = @()
-		Write-TSxLog -Level 'WARN' -Message ('WhatIf mode skipped catalog query for {0}' -f $categoryDefinition.Name)
-	}
-	Write-TSxLog -Message ('Catalog returned {0} result(s) for {1}' -f $searchResults.Count, $categoryDefinition.Name)
 
-	if ($searchResults.Count -eq 0 -and $WhatIfPreference) {
-		Write-TSxLog -Level 'WARN' -Message ('WhatIf mode produced no catalog results for {0} because the web request was skipped.' -f $categoryDefinition.Name)
-		continue
-	}
+if ($showProgress) {
+	$ProgressPreference = 'Continue'
+}
+if ($emitUiProgress) {
+	$InformationPreference = 'Continue'
+}
 
-	$candidateUpdates = $searchResults | Where-Object {
-		$matchesCategory = Test-TSxTitlePatternMatch -Title $_.Title -IncludePatterns $categoryDefinition.IncludePatterns -ExcludePatterns $categoryDefinition.ExcludePatterns
-		$requiresArchitectureMatch = $true
-		if ($categoryDefinition.PSObject.Properties['RequiresArchitectureMatch']) {
-			$requiresArchitectureMatch = [bool]$categoryDefinition.RequiresArchitectureMatch
+Write-TSxLog -Message ('ExecutionContext: {0}' -f $tsxExecutionContext)
+
+try {
+	foreach ($categoryDefinition in $categoryDefinitions) {
+		$categoryIndex++
+		$percentComplete = [int](($categoryIndex * 100) / $categoryCount)
+		$progressStatus = ('{0} ({1}/{2})' -f $categoryDefinition.Name, $categoryIndex, $categoryCount)
+		if ($showProgress) {
+			Write-Progress -Id $progressId -Activity 'Querying Windows Update Catalog' -Status $progressStatus -PercentComplete $percentComplete
 		}
-		$matchesArchitecture = (-not $requiresArchitectureMatch) -or ($_.Title -match ('(?i){0}' -f [regex]::Escape($Architecture)))
-		$requiresOperatingSystemMatch = $true
-		if ($categoryDefinition.PSObject.Properties['RequiresOperatingSystemMatch']) {
-			$requiresOperatingSystemMatch = [bool]$categoryDefinition.RequiresOperatingSystemMatch
+		if ($emitUiProgress) {
+			Write-Information -MessageData ('Progress: {0}% - {1}' -f $percentComplete, $progressStatus)
 		}
-		$matchesOperatingSystem = (-not $requiresOperatingSystemMatch) -or (Test-TSxOperatingSystemMatch -Title $_.Title -Product $_.Product -OperatingSystem $OperatingSystem)
-		$matchesPreviewRule = $script:IncludePreviewEffective -or ($_.Title -notmatch '(?i)Preview')
-		$isInsiderUpdate = $_.Title -match '(?i)Windows Insider|Insider Pre-Release' -or $_.Product -match '(?i)Windows Insider|Insider Pre-Release'
-		$matchesCategory -and $matchesArchitecture -and $matchesOperatingSystem -and $matchesPreviewRule -and (-not $isInsiderUpdate)
-	}
+		elseif ($showProgress -and $isIseHost) {
+			Write-Host ('Progress: {0}% - {1}' -f $percentComplete, $progressStatus)
+		}
 
-	if (-not $candidateUpdates) {
-		Write-TSxLog -Level 'WARN' -Message ('No updates matched category {0}.' -f $categoryDefinition.Name)
-		continue
-	}
-
-	$sortedCategoryUpdates = @(
-		$candidateUpdates |
-		Sort-Object -Property @{ Expression = { $_.LastUpdated }; Descending = $true }, @{ Expression = { $_.Build }; Descending = $true }, @{ Expression = { $_.Title }; Descending = $true }
-	)
-
-	Write-TSxLog -Message ('Category {0} produced {1} candidate update(s).' -f $categoryDefinition.Name, $sortedCategoryUpdates.Count)
-
-	$categorySelection = if ($LatestOnly) { @($sortedCategoryUpdates | Select-Object -First 1) } else { $sortedCategoryUpdates }
-	foreach ($update in $categorySelection) {
-		if ($seenUpdateIds.Add([string]$update.UpdateId)) {
-			$null = $outputUpdates.Add((ConvertTo-TSxUpdateObject -Update $update -OperatingSystem $OperatingSystem -Architecture $Architecture -SearchQuery $searchQuery -UpdateType $categoryDefinition.Name -LogPath $script:LogFilePath))
+		$searchQuery = $categoryDefinition.Query -f $OperatingSystem, $Architecture
+		Write-TSxLog -Message ('Query for {0}: {1}' -f $categoryDefinition.Name, $searchQuery)
+		Write-Verbose ('Query for {0}: {1}' -f $categoryDefinition.Name, $searchQuery)
+		if ($PSCmdlet.ShouldProcess($searchQuery, ('Query Windows Update Catalog for {0}' -f $categoryDefinition.Name))) {
+			$searchResults = @(Get-TSxCatalogSearchResults -Query $searchQuery)
 		}
 		else {
-			Write-TSxLog -Message ('Skipping duplicate UpdateId {0} from category {1}' -f $update.UpdateId, $categoryDefinition.Name)
+			$searchResults = @()
+			Write-TSxLog -Level 'WARN' -Message ('WhatIf mode skipped catalog query for {0}' -f $categoryDefinition.Name)
+		}
+		Write-TSxLog -Message ('Catalog returned {0} result(s) for {1}' -f $searchResults.Count, $categoryDefinition.Name)
+
+		if ($searchResults.Count -eq 0 -and $WhatIfPreference) {
+			Write-TSxLog -Level 'WARN' -Message ('WhatIf mode produced no catalog results for {0} because the web request was skipped.' -f $categoryDefinition.Name)
+			continue
+		}
+
+		$candidateUpdates = $searchResults | Where-Object {
+			$matchesCategory = Test-TSxTitlePatternMatch -Title $_.Title -IncludePatterns $categoryDefinition.IncludePatterns -ExcludePatterns $categoryDefinition.ExcludePatterns
+			$requiresArchitectureMatch = $true
+			if ($categoryDefinition.PSObject.Properties['RequiresArchitectureMatch']) {
+				$requiresArchitectureMatch = [bool]$categoryDefinition.RequiresArchitectureMatch
+			}
+			$matchesArchitecture = (-not $requiresArchitectureMatch) -or ($_.Title -match ('(?i){0}' -f [regex]::Escape($Architecture)))
+			$requiresOperatingSystemMatch = $true
+			if ($categoryDefinition.PSObject.Properties['RequiresOperatingSystemMatch']) {
+				$requiresOperatingSystemMatch = [bool]$categoryDefinition.RequiresOperatingSystemMatch
+			}
+			$matchesOperatingSystem = (-not $requiresOperatingSystemMatch) -or (Test-TSxOperatingSystemMatch -Title $_.Title -Product $_.Product -OperatingSystem $OperatingSystem)
+			$matchesPreviewRule = $script:IncludePreviewEffective -or ($_.Title -notmatch '(?i)Preview')
+			$isInsiderUpdate = $_.Title -match '(?i)Windows Insider|Insider Pre-Release' -or $_.Product -match '(?i)Windows Insider|Insider Pre-Release'
+			$matchesCategory -and $matchesArchitecture -and $matchesOperatingSystem -and $matchesPreviewRule -and (-not $isInsiderUpdate)
+		}
+
+		if (-not $candidateUpdates) {
+			Write-TSxLog -Level 'WARN' -Message ('No updates matched category {0}.' -f $categoryDefinition.Name)
+			continue
+		}
+
+		$sortedCategoryUpdates = @(
+			$candidateUpdates |
+			Sort-Object -Property @{ Expression = { $_.LastUpdated }; Descending = $true }, @{ Expression = { $_.Build }; Descending = $true }, @{ Expression = { $_.Title }; Descending = $true }
+		)
+
+		Write-TSxLog -Message ('Category {0} produced {1} candidate update(s).' -f $categoryDefinition.Name, $sortedCategoryUpdates.Count)
+
+		$categorySelection = if ($LatestOnly) { @($sortedCategoryUpdates | Select-Object -First 1) } else { $sortedCategoryUpdates }
+		foreach ($update in $categorySelection) {
+			if ($seenUpdateIds.Add([string]$update.UpdateId)) {
+				$null = $outputUpdates.Add((ConvertTo-TSxUpdateObject -Update $update -OperatingSystem $OperatingSystem -Architecture $Architecture -SearchQuery $searchQuery -UpdateType $categoryDefinition.Name -LogPath $script:LogFilePath))
+			}
+			else {
+				Write-TSxLog -Message ('Skipping duplicate UpdateId {0} from category {1}' -f $update.UpdateId, $categoryDefinition.Name)
+			}
 		}
 	}
+}
+finally {
+	if ($showProgress) {
+		Write-Progress -Id $progressId -Activity 'Querying Windows Update Catalog' -Completed
+	}
+	$ProgressPreference = $previousProgressPreference
+	$InformationPreference = $previousInformationPreference
 }
 
 if ($outputUpdates.Count -eq 0 -and $WhatIfPreference) {

@@ -2,11 +2,16 @@
 
 Toolset to search and download the latest Windows cumulative updates from Microsoft Update Catalog.
 
+The scripts use the shared module in `Modules/TSxLatestWindowsUpdateUtility` for parsing, logging,
+download logic, and host execution-context detection (`Wrapper`, `ISE`, `CommandLine`).
+
 ## Included scripts
 
 - `Get-TSxWindowsUpdateUI.ps1`: Windows Forms GUI for search and download.
 - `Get-TSxWindowsUpdateList.ps1`: CLI script that returns catalog entries.
-- `Save-TSxWindowsUpdateFromCatalog.ps1`: CLI script that downloads files from catalog entries.
+- `Save-TSxWindowsUpdate.ps1`: CLI script that downloads files from catalog entries.
+- `Add-TSxUpdatesToImage.ps1`: CLI script for offline image patching (.wim/.vhdx).
+- `Add-TSxUpdatesToImageUI.ps1`: Windows Forms GUI for offline image patching.
 
 ## Logging
 
@@ -16,9 +21,11 @@ All scripts now log by default to:
 
 Default log files:
 
-- `Get-TSxWindowsUpdate.log`
+- `Get-TSxWindowsUpdateUI.log`
 - `Get-TSxWindowsUpdateList.log`
-- `Save-TSxWindowsUpdateFromCatalog.log`
+- `Save-TSxWindowsUpdate.log`
+- `Add-TSxUpdatesToImage.log`
+- `Add-TSxUpdatesToImageUI.log`
 
 Each script logs automatically to `%TEMP%\Get-TSxLatestWindowsUpdate\<script-name>.log`. `-Force` recreates the current script's log file content for that run.
 No script in this folder accepts a `-LogPath` parameter.
@@ -46,7 +53,7 @@ No script in this folder accepts a `-LogPath` parameter.
 
 ```powershell
 $updates = .\Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -Architecture x64 -IncludeCumulative -IncludeDotNet -IncludeSSU -LatestOnly -Verbose
-$updates | .\Save-TSxWindowsUpdateFromCatalog.ps1 -Path 'C:\Temp\Updates' -WhatIf -Verbose
+$updates | .\Save-TSxWindowsUpdate.ps1 -Path 'C:\Temp\Updates' -WhatIf -Verbose
 ```
 
 Remove `-WhatIf` to perform real downloads.
@@ -61,7 +68,7 @@ $arch = 'x64'
 $target = 'D:\Packages\WindowsUpdates'
 
 $updates = .\Get-TSxWindowsUpdateList.ps1 -OperatingSystem $os -Architecture $arch -IncludeCumulative -IncludeDotNet -IncludeSSU -LatestOnly -Verbose
-$results = $updates | .\Save-TSxWindowsUpdateFromCatalog.ps1 -Path $target -Force -Verbose
+$results = $updates | .\Save-TSxWindowsUpdate.ps1 -Path $target -Force -Verbose
 
 $results | Format-Table UpdateType, UpdateId, KB, Architecture, FileName, DestinationPath, WasDownloaded, WasSkipped -AutoSize
 ```
@@ -71,6 +78,7 @@ $results | Format-Table UpdateType, UpdateId, KB, Architecture, FileName, Destin
 - `-Verbose`: detailed progress and decision logging.
 - `-WhatIf`: simulates actions protected by `ShouldProcess`.
 - `-Force`: recreates current log file content and overwrites existing destination files during download.
+- `-NoProgress`: suppresses native PowerShell progress bar output in standalone download runs.
 
 ### Update categories (list script)
 
@@ -80,12 +88,11 @@ $results | Format-Table UpdateType, UpdateId, KB, Architecture, FileName, Destin
 - `-IncludeDefender`: includes Defender-related updates.
 - `-IncludeEdge`: includes Edge-related updates.
 - `-IncludePreview`: includes preview updates; by default previews are excluded.
-- `-IncludeInsider`: includes Windows Insider pre-release updates; by default Insider updates are excluded.
 
 Default offline servicing profile:
 
 - Enabled by default: `-IncludeCumulative`, `-IncludeDotNet`, `-IncludeSSU`
-- Disabled by default: `-IncludeDefender`, `-IncludeEdge`, `-IncludePreview`, `-IncludeInsider`
+- Disabled by default: `-IncludeDefender`, `-IncludeEdge`, `-IncludePreview`
 
 ### Typical operational recommendations
 

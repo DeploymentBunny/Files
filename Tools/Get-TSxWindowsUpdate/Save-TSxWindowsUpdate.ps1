@@ -15,17 +15,26 @@
 .PARAMETER Force
     Overwrites existing destination files and recreates the log file content for the current execution.
 
+.PARAMETER UiProgress
+    Emits progress updates as information records for UI wrappers.
+
+.PARAMETER NoProgress
+    Suppresses native PowerShell progress output for standalone usage.
+
+.PARAMETER UseLegacyTranser
+    Forces the legacy HTTP transfer path instead of BITS.
+
 .EXAMPLE
     Get-TSxWindowsUpdateList.ps1 -OperatingSystem 'Windows 11 24H2' -LatestOnly |
-        .\Save-TSxWindowsUpdateFromCatalog.ps1 -Path 'C:\Temp\Updates' -Verbose -WhatIf
+        .\Save-TSxWindowsUpdate.ps1 -Path 'C:\Temp\Updates' -Verbose -WhatIf
 
 .NOTES
-    FileName:    Save-TSxWindowsUpdateFromCatalog.ps1
-    Version:     1.2.9
+    FileName:    Save-TSxWindowsUpdate.ps1
+    Version:     1.2.21
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
-    Updated:     2026-05-25
+    Updated:     2026-05-26
     Twitter:     @mikael_nystrom
 
     Disclaimer:
@@ -38,7 +47,7 @@
 .FUNCTIONALITY
     Resolves catalog download links and downloads selected update files to disk.
 #>
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium', PositionalBinding = $false)]
 param(
     [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
     [ValidateNotNull()]
@@ -49,7 +58,16 @@ param(
     [string]$Path,
 
     [Parameter()]
-    [switch]$Force
+    [switch]$Force,
+
+    [Parameter()]
+    [switch]$UiProgress,
+
+    [Parameter()]
+    [switch]$NoProgress,
+
+    [Parameter()]
+    [switch]$UseLegacyTranser
 )
 
 Set-StrictMode -Version Latest
@@ -65,8 +83,24 @@ Start-TSxLog -FilePath $script:LogFilePath -Force:$Force
 Write-TSxLog -Message ('{0} started' -f $scriptName)
 Write-TSxLog -Message ('Download path: {0}' -f $Path)
 Write-TSxLog -Message ('Force: {0}' -f $Force.IsPresent)
+Write-TSxLog -Message ('UiProgress: {0}' -f $UiProgress.IsPresent)
+Write-TSxLog -Message ('NoProgress: {0}' -f $NoProgress.IsPresent)
+Write-TSxLog -Message ('UseLegacyTranser: {0}' -f $UseLegacyTranser.IsPresent)
 Write-TSxLog -Message ('Log root path: {0}' -f $script:LogRootPath)
 Write-TSxLog -Message ('Log path: {0}' -f $script:LogFilePath)
+
+$tsxExecutionContext = Get-TSxExecutionContext
+$isIseHost = $tsxExecutionContext -eq 'ISE'
+$isWrapperHost = $tsxExecutionContext -eq 'Wrapper'
+$effectiveUiProgress = [bool]($UiProgress -or $isWrapperHost -or ($isIseHost -and -not $NoProgress))
+Write-TSxLog -Message ('Host: {0}' -f $host.Name)
+Write-TSxLog -Message ('ExecutionContext: {0}' -f $tsxExecutionContext)
+Write-TSxLog -Message ('EffectiveUiProgress: {0}' -f $effectiveUiProgress)
+
+if ($effectiveUiProgress) {
+    # Ensure nested Write-Information calls are emitted so UI wrappers can capture them.
+    $InformationPreference = 'Continue'
+}
 
 if (-not (Test-Path -Path $Path)) {
     Write-TSxLog -Message ('Creating download directory: {0}' -f $Path)
@@ -156,7 +190,8 @@ foreach ($currentInputObject in $allInputObjects) {
     }
 
     if ($PSCmdlet.ShouldProcess($destinationPath, ('Download {0} (UpdateId: {1})' -f $updateDisplayName, $updateId))) {
-        Invoke-TSxFileDownload -Url $selectedFile.Url -DestinationPath $destinationPath -UpdateId $updateId -UpdateName $updateDisplayName
+        $emitNativeProgress = (-not $effectiveUiProgress) -and (-not $NoProgress)
+        Invoke-TSxFileDownload -Url $selectedFile.Url -DestinationPath $destinationPath -UpdateId $updateId -UpdateName $updateDisplayName -UiProgress:$effectiveUiProgress -EmitNativeProgress:$emitNativeProgress -UseLegacyTranser:$UseLegacyTranser -InformationAction Continue
         Write-TSxLog -Message ('Download completed: {0}' -f $destinationPath)
     }
 
