@@ -1,4 +1,4 @@
-# Get-TSxLatestWindowsUpdate
+# Get-TSxWindowsUpdate
 
 Toolset to search and download the latest Windows cumulative updates from Microsoft Update Catalog.
 
@@ -17,7 +17,7 @@ download logic, and host execution-context detection (`Wrapper`, `ISE`, `Command
 
 All scripts now log by default to:
 
-`%TEMP%\Get-TSxLatestWindowsUpdate`
+`%TEMP%\Get-TSxWindowsUpdate`
 
 Default log files:
 
@@ -27,7 +27,7 @@ Default log files:
 - `Add-TSxUpdatesToImage.log`
 - `Add-TSxUpdatesToImageUI.log`
 
-Each script logs automatically to `%TEMP%\Get-TSxLatestWindowsUpdate\<script-name>.log`. `-Force` recreates the current script's log file content for that run.
+Each script logs automatically to `%TEMP%\Get-TSxWindowsUpdate\<script-name>.log`. `-Force` recreates the current script's log file content for that run.
 No script in this folder accepts a `-LogPath` parameter.
 
 ## For users

@@ -21,12 +21,15 @@ Folder where the ESD file will be stored.
 .PARAMETER Force
 Overwrites existing ESD files.
 
+.PARAMETER NoProgress
+Suppresses host progress output.
+
 .EXAMPLE
 .\Invoke-TSxESDDownload.ps1 -Url "https://example.com/install.esd"
 
 .NOTES
 	FileName:    Invoke-TSxESDDownload.ps1
-	Version:     1.3.3
+	Version:     1.3.4
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -47,7 +50,8 @@ param(
 	[string]$Url,
 	[string]$FileName,
 	[string]$OutputPath = (Join-Path $PSScriptRoot 'Downloads'),
-	[switch]$Force
+	[switch]$Force,
+	[switch]$NoProgress
 )
 
 Set-StrictMode -Version Latest
@@ -81,6 +85,50 @@ if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
 Write-TSxLog -Message "Script start. OutputPath=$OutputPath" -WriteVerbose
+
+function Write-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Status,
+
+		[int]$PercentComplete = -1
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	if ($PercentComplete -ge 0) {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status -PercentComplete $PercentComplete
+	}
+	else {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status
+	}
+}
+
+function Complete-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	Write-Progress -Id $Id -Activity $Activity -Completed
+}
 
 function Resolve-DownloadSource {
 	[CmdletBinding()]
@@ -263,17 +311,123 @@ function Save-EsdFile {
 			return ($Message -match '(?i)not enough space|insufficient disk space|disk full|0x80070070')
 		}
 
+		function Get-BitsJobIdentifier {
+			[CmdletBinding()]
+			param(
+				[Parameter(Mandatory = $true)]
+				[object]$BitsJob
+			)
+
+			if ($BitsJob.PSObject.Properties['JobId'] -and $BitsJob.JobId) {
+				return $BitsJob.JobId
+			}
+
+			if ($BitsJob.PSObject.Properties['Id'] -and $BitsJob.Id) {
+				return $BitsJob.Id
+			}
+
+			return $null
+		}
+
+		function Invoke-HttpDownload {
+			[CmdletBinding()]
+			param(
+				[Parameter(Mandatory = $true)]
+				[string]$Url,
+
+				[Parameter(Mandatory = $true)]
+				[string]$DestinationPath
+			)
+
+			$response = $null
+			$responseStream = $null
+			$fileStream = $null
+
+			try {
+				$request = [System.Net.HttpWebRequest]::Create($Url)
+				$request.Method = 'GET'
+				$response = $request.GetResponse()
+				$responseStream = $response.GetResponseStream()
+				$fileStream = [System.IO.File]::Open($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+
+				$buffer = New-Object byte[] 81920
+				$totalBytes = [int64]$response.ContentLength
+				$totalRead = [int64]0
+
+				while (($bytesRead = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+					$fileStream.Write($buffer, 0, $bytesRead)
+					$totalRead += $bytesRead
+
+					if ($totalBytes -gt 0) {
+						$percentComplete = [int](($totalRead * 100) / $totalBytes)
+						$status = '{0:N1} MB / {1:N1} MB' -f ($totalRead / 1MB), ($totalBytes / 1MB)
+						Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status $status -PercentComplete $percentComplete
+					}
+					else {
+						Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status ('{0:N1} MB downloaded' -f ($totalRead / 1MB))
+					}
+				}
+			}
+			finally {
+				if ($fileStream) { $fileStream.Dispose() }
+				if ($responseStream) { $responseStream.Dispose() }
+				if ($response) { $response.Dispose() }
+			}
+		}
+
 		$bitsCommand = Get-Command -Name Start-BitsTransfer -ErrorAction SilentlyContinue
 		if ($bitsCommand) {
 			$maxBitsAttempts = 10
 			for ($attempt = 1; $attempt -le $maxBitsAttempts; $attempt++) {
+				$bitsJob = $null
 				Write-Verbose "Downloading with Start-BitsTransfer (attempt $attempt/$maxBitsAttempts): $DestinationPath"
 				try {
-					Start-BitsTransfer -Source $Url -Destination $DestinationPath -Description "Download $([System.IO.Path]::GetFileName($DestinationPath))" -DisplayName 'Invoke-TSxESDDownload' -ErrorAction Stop
+					if ($NoProgress) {
+						Start-BitsTransfer -Source $Url -Destination $DestinationPath -Description "Download $([System.IO.Path]::GetFileName($DestinationPath))" -DisplayName 'Invoke-TSxESDDownload' -ErrorAction Stop
+					}
+					else {
+						Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status ("Starting BITS attempt {0}/{1}" -f $attempt, $maxBitsAttempts)
+						$bitsJob = Start-BitsTransfer -Source $Url -Destination $DestinationPath -Description "Download $([System.IO.Path]::GetFileName($DestinationPath))" -DisplayName 'Invoke-TSxESDDownload' -Asynchronous -ErrorAction Stop
+						$bitsJobId = Get-BitsJobIdentifier -BitsJob $bitsJob
+						if (-not $bitsJobId) {
+							throw 'BITS did not return a valid job identifier.'
+						}
+
+						while ($true) {
+							$bitsJob = Get-BitsTransfer -JobId $bitsJobId -ErrorAction Stop
+
+							if ($bitsJob.BytesTotal -gt 0) {
+								$percentComplete = [int](($bitsJob.BytesTransferred * 100) / $bitsJob.BytesTotal)
+								$status = '{0:N1} MB / {1:N1} MB' -f ($bitsJob.BytesTransferred / 1MB), ($bitsJob.BytesTotal / 1MB)
+								Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status $status -PercentComplete $percentComplete
+							}
+							else {
+								Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status ('{0:N1} MB downloaded' -f ($bitsJob.BytesTransferred / 1MB))
+							}
+
+							if ($bitsJob.JobState -in @('Transferred', 'Acknowledged')) {
+								Complete-BitsTransfer -BitsJob $bitsJob -ErrorAction Stop
+								$bitsJob = $null
+								break
+							}
+
+							if ($bitsJob.JobState -in @('Error', 'TransientError', 'Cancelled')) {
+								$bitsError = if ($bitsJob.ErrorDescription) { $bitsJob.ErrorDescription } else { ('BITS state: {0}' -f $bitsJob.JobState) }
+								Remove-BitsTransfer -BitsJob $bitsJob -ErrorAction SilentlyContinue
+								throw $bitsError
+							}
+
+							[System.Threading.Thread]::Sleep(500)
+						}
+					}
+					Complete-TSxProgress -Id 1301 -Activity 'Downloading ESD file'
 					return
 				} catch {
 					$errorMessage = [string]$_.Exception.Message
 					Write-TSxLog -Level 'WARN' -Message "Start-BitsTransfer attempt $attempt failed. $errorMessage" -WriteVerbose
+					if (-not $NoProgress) {
+						Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status ("BITS attempt {0}/{1} failed" -f $attempt, $maxBitsAttempts)
+					}
 					if (Test-Path -Path $DestinationPath -PathType Leaf) {
 						Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
 					}
@@ -286,12 +440,27 @@ function Save-EsdFile {
 					if ($attempt -eq $maxBitsAttempts) {
 						Write-TSxLog -Level 'WARN' -Message 'Start-BitsTransfer retries exhausted, falling back to Invoke-WebRequest.' -WriteVerbose
 					}
+				} finally {
+					if ($bitsJob) {
+						try {
+							$bitsJobId = Get-BitsJobIdentifier -BitsJob $bitsJob
+							if ($bitsJobId) {
+								$existingBitsJob = Get-BitsTransfer -JobId $bitsJobId -ErrorAction SilentlyContinue
+								if ($existingBitsJob -and $existingBitsJob.JobState -notin @('Cancelled', 'Transferred', 'Acknowledged')) {
+									Remove-BitsTransfer -BitsJob $existingBitsJob -ErrorAction SilentlyContinue
+								}
+							}
+						} catch {
+						}
+					}
 				}
 			}
 		}
 
 		Write-Verbose "Start-BitsTransfer is not available, falling back to Invoke-WebRequest: $DestinationPath"
-		Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
+		Write-TSxProgress -Id 1301 -Activity 'Downloading ESD file' -Status 'Downloading with HTTP fallback'
+		Invoke-HttpDownload -Url $Url -DestinationPath $DestinationPath
+		Complete-TSxProgress -Id 1301 -Activity 'Downloading ESD file'
 	}
 
 	$destinationDirectory = Split-Path -Path $DestinationPath -Parent
@@ -381,8 +550,13 @@ try {
 		$items.Add($null)
 	}
 
+	$totalItems = $items.Count
+	$itemIndex = 0
 	foreach ($item in $items) {
+		$itemIndex++
 		$source = Resolve-DownloadSource -CatalogItem $item -Url $Url -FileName $FileName
+		$itemPercentComplete = if ($totalItems -gt 0) { [int](($itemIndex / $totalItems) * 100) } else { 0 }
+		Write-TSxProgress -Id 1300 -Activity 'Preparing ESD downloads' -Status ("Resolving download {0}/{1}: {2}" -f $itemIndex, $totalItems, [System.IO.Path]::GetFileName($source.FileName)) -PercentComplete $itemPercentComplete
 		Write-TSxLog -Message "Resolved source URL=$($source.Url); FileName=$($source.FileName)"
 
 		$esdPath = Resolve-DestinationPath -ResolvedFileName $source.FileName -OutputPath $OutputPath -SourceUrl $source.Url
@@ -397,6 +571,7 @@ try {
 			OutputPath    = Split-Path -Path $downloadedPath -Parent
 		}
 	}
+	Complete-TSxProgress -Id 1300 -Activity 'Preparing ESD downloads'
 } catch {
 	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose
 	throw

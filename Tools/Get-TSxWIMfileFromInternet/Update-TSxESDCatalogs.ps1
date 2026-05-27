@@ -12,12 +12,15 @@ Optional destination path for refreshed catalog XML files.
 .PARAMETER Force
 Re-downloads catalog files even when they already exist and overwrites them.
 
+.PARAMETER NoProgress
+Suppresses host progress output.
+
 .EXAMPLE
 .\Update-TSxESDCatalogs.ps1
 
 .NOTES
 	FileName:    Update-TSxESDCatalogs.ps1
-	Version:     1.3.9
+	Version:     1.3.10
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -33,7 +36,8 @@ Re-downloads catalog files even when they already exist and overwrites them.
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
 	[string]$CatalogPath,
-	[switch]$Force
+	[switch]$Force,
+	[switch]$NoProgress
 )
 
 Set-StrictMode -Version Latest
@@ -69,6 +73,50 @@ if (-not $WhatIfPreference -and -not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
 Write-TSxLog -Message "Script start. CatalogPath=$CatalogPath; Force=$($Force.IsPresent); VerboseEnabled=$($VerbosePreference -ne 'SilentlyContinue')" -WriteVerbose
+
+function Write-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Status,
+
+		[int]$PercentComplete = -1
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	if ($PercentComplete -ge 0) {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status -PercentComplete $PercentComplete
+	}
+	else {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status
+	}
+}
+
+function Complete-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	Write-Progress -Id $Id -Activity $Activity -Completed
+}
 
 $Script:DefaultCatalogPath = Join-Path $PSScriptRoot 'Catalogs'
 
@@ -157,8 +205,13 @@ function Update-MicrosoftCatalogFiles {
 	)
 
 	$results = New-Object System.Collections.Generic.List[object]
+	$totalSources = $catalogSources.Count
+	$sourceIndex = 0
 	foreach ($source in $catalogSources) {
+		$sourceIndex++
 		$destinationPath = Join-Path $targetPath $source.Name
+		$sourcePercentComplete = if ($totalSources -gt 0) { [int](($sourceIndex / $totalSources) * 100) } else { 0 }
+		Write-TSxProgress -Id 1400 -Activity 'Refreshing ESD catalogs' -Status ("Processing {0} ({1}/{2})" -f $source.Name, $sourceIndex, $totalSources) -PercentComplete $sourcePercentComplete
 		if ((Test-Path -Path $destinationPath) -and -not $Force) {
 			Write-TSxLog -Message "Skipping existing catalog file (use -Force to refresh): $destinationPath" -WriteVerbose
 			continue
@@ -176,7 +229,9 @@ function Update-MicrosoftCatalogFiles {
 
 		try {
 			$sourceFile = Join-Path $tempRoot 'source.cab'
+			Write-TSxProgress -Id 1400 -Activity 'Refreshing ESD catalogs' -Status ("Downloading {0}" -f $source.Name) -PercentComplete $sourcePercentComplete
 			Invoke-WebRequest -Uri $sourceUrl -OutFile $sourceFile -UseBasicParsing -ErrorAction Stop
+			Write-TSxProgress -Id 1400 -Activity 'Refreshing ESD catalogs' -Status ("Extracting {0}" -f $source.Name) -PercentComplete $sourcePercentComplete
 			& expand.exe -R $sourceFile -F:* $tempRoot | Out-Null
 
 			$xmlFile = Get-ChildItem -Path $tempRoot -Filter '*.xml' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -191,6 +246,7 @@ function Update-MicrosoftCatalogFiles {
 			Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 		}
 	}
+	Complete-TSxProgress -Id 1400 -Activity 'Refreshing ESD catalogs'
 
 	return $results
 }

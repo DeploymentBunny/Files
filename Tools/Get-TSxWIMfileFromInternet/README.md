@@ -148,6 +148,7 @@ $download | .\Get-TSxESDInfo.ps1
 
 Use this only if you need WIM format.
 The script now shows a progress bar during conversion. Add -Verbose if you also want status messages for each exported image.
+The converter returns the resulting WIM path directly, so it can be passed on in a pipeline or assigned to a variable.
 
 Convert a file later from its ESD path:
 

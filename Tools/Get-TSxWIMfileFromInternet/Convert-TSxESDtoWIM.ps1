@@ -5,6 +5,7 @@ Converts an ESD file to a WIM file.
 .DESCRIPTION
 Accepts an ESD path directly or from a piped object, reads the available image
 indexes, and exports them to a WIM file with visible progress reporting.
+Returns the resulting WIM file path so the output can be used directly in a pipeline.
 
 .PARAMETER InputObject
 Optional piped object that contains an EsdPath, FilePath, or FullName property.
@@ -18,6 +19,9 @@ same path as the ESD file and changes the extension to .wim.
 
 .PARAMETER Force
 Overwrites an existing WIM file.
+
+.PARAMETER NoProgress
+Suppresses host progress output.
 
 .PARAMETER Index
 Optional image index list to export from the ESD (for example 1,2,3).
@@ -34,11 +38,11 @@ $download | .\Convert-TSxESDtoWIM.ps1 -Verbose
 
 .NOTES
 	FileName:    Convert-TSxESDtoWIM.ps1
-	Version:     1.1.20
+	Version:     1.1.24
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-22
+	Updated:     2026-05-27
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -55,7 +59,8 @@ param(
 	[string]$EsdPath,
 	[string]$WimPath,
 	[int[]]$Index,
-	[switch]$Force
+	[switch]$Force,
+	[switch]$NoProgress
 )
 
 Set-StrictMode -Version Latest
@@ -93,6 +98,50 @@ Write-Verbose "[Convert-TSxESDtoWIM] Log root path: $Script:LogRootPath"
 Write-Verbose "[Convert-TSxESDtoWIM] Script log path: $Script:LogFilePath"
 Write-Verbose "[Convert-TSxESDtoWIM] DISM log path: $Script:DismLogPath"
 Write-TSxLog -Message 'Script start.' -WriteVerbose
+
+function Write-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Status,
+
+		[int]$PercentComplete = -1
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	if ($PercentComplete -ge 0) {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status -PercentComplete $PercentComplete
+	}
+	else {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status
+	}
+}
+
+function Complete-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	Write-Progress -Id $Id -Activity $Activity -Completed
+}
 
 function Write-ConversionStatus {
 	[CmdletBinding()]
@@ -399,7 +448,7 @@ function Convert-EsdPathToWim {
 		$imageLabel = if ([string]::IsNullOrWhiteSpace([string]$image.ImageName)) { "Index $imageIndex" } else { "Index $imageIndex - $($image.ImageName)" }
 		Write-ConversionStatus "Exporting $imageLabel ($currentImage/$totalImages)..."
 		$percentComplete = [int]((($currentImage - 1) / $totalImages) * 100)
-		Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Starting $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
+		Write-TSxProgress -Id 1 -Activity 'Converting ESD to WIM' -Status "Starting $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
 		Write-Verbose "Converting $imageLabel to $WimPath ($currentImage of $totalImages)"
 
 		$action = "Export index $imageIndex from $EsdPath"
@@ -420,8 +469,9 @@ function Convert-EsdPathToWim {
 				} -ArgumentList $EsdPath, $imageIndex, $WimPath, $Script:DismLogPath
 
 				$exportStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+				$logThrottleStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 				while ($true) {
-					$completedJob = Wait-Job -Job $exportJob -Timeout 30
+					$completedJob = Wait-Job -Job $exportJob -Timeout 5
 					if ($null -ne $completedJob) {
 						break
 					}
@@ -434,9 +484,15 @@ function Convert-EsdPathToWim {
 					$elapsedMinutes = [int]$exportStopwatch.Elapsed.TotalMinutes
 					$elapsedSeconds = [int]$exportStopwatch.Elapsed.Seconds
 					$elapsedText = "{0:00}:{1:00}" -f $elapsedMinutes, $elapsedSeconds
-					$currentWimSizeGBText = "{0:00.00}" -f $currentWimSizeGBValue
+					$currentWimSizeGBText = "{0:0.00}" -f $currentWimSizeGBValue
 
-					Write-ConversionStatus "Still exporting $imageLabel. Elapsed: $elapsedText, current WIM size: ${currentWimSizeGBText} GB"
+					$progressStatus = "{0} ({1}/{2})  Elapsed: {3}  WIM size: {4} GB" -f $imageLabel, $currentImage, $totalImages, $elapsedText, $currentWimSizeGBText
+					Write-TSxProgress -Id 1 -Activity 'Converting ESD to WIM' -Status $progressStatus -PercentComplete $percentComplete
+
+					if ($logThrottleStopwatch.Elapsed.TotalSeconds -ge 30) {
+						Write-ConversionStatus "Still exporting $imageLabel. Elapsed: $elapsedText, current WIM size: ${currentWimSizeGBText} GB"
+						$logThrottleStopwatch.Restart()
+					}
 				}
 
 				$jobOutput = Receive-Job -Job $exportJob -ErrorAction SilentlyContinue
@@ -462,9 +518,9 @@ function Convert-EsdPathToWim {
 				}
 
 				$percentComplete = [int](($currentImage / $totalImages) * 100)
-				Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Status "Completed $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
+				Write-TSxProgress -Id 1 -Activity 'Converting ESD to WIM' -Status "Completed $imageLabel ($currentImage of $totalImages)" -PercentComplete $percentComplete
 			} catch {
-				Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Completed
+				Complete-TSxProgress -Id 1 -Activity 'Converting ESD to WIM'
 				Write-TSxLog -Level 'ERROR' -Message "Export-WindowsImage failed for index $imageIndex. $($_.Exception.Message)"
 				throw "Export-WindowsImage failed while exporting index $imageIndex from $EsdPath. $($_.Exception.Message)"
 			} finally {
@@ -475,7 +531,7 @@ function Convert-EsdPathToWim {
 		}
 	}
 
-	Write-Progress -Id 1 -Activity 'Converting ESD to WIM' -Completed
+	Complete-TSxProgress -Id 1 -Activity 'Converting ESD to WIM'
 	Write-ConversionStatus "Conversion completed: $WimPath"
 	if (Test-Path -Path $WimPath -PathType Leaf) {
 		$completedSizeGB = [math]::Round(((Get-Item -Path $WimPath).Length / 1GB), 2)
@@ -508,12 +564,7 @@ try {
 		Write-TSxLog -Message "Resolved conversion job. EsdPath=[$resolvedEsdPath]; WimPath=[$resolvedWimPath]; Index=$indexText" -WriteVerbose
 		Write-TSxLog -Message "Starting conversion job for source '$resolvedEsdPath' to destination '$resolvedWimPath'." -WriteVerbose
 		$finalWimPath = Convert-EsdPathToWim -EsdPath $resolvedEsdPath -WimPath $resolvedWimPath -Index $Index -Force:$Force -WhatIf:$WhatIfPreference
-
-		[PSCustomObject]@{
-			EsdPath   = $resolvedEsdPath
-			WimPath   = $finalWimPath
-			Converted = $true
-		}
+		Write-Output $finalWimPath
 	}
 } catch {
 	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose

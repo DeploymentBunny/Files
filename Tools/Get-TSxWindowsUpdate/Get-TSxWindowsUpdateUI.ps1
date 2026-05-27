@@ -15,11 +15,11 @@
 
 .NOTES
     FileName:    Get-TSxWindowsUpdateUI.ps1
-    Version:     1.2.44
+    Version:     1.2.45
     Author:      Mikael Nystrom
     Contact:     @mikael_nystrom
     Created:     2026-05-22
-    Updated:     2026-05-26
+    Updated:     2026-05-27
     Twitter:     @mikael_nystrom
 
     Disclaimer:
@@ -31,7 +31,7 @@
 
 .FUNCTIONALITY
     Starts a Windows Forms UI for querying Microsoft Update Catalog and downloading selected updates.
-    Loads and saves last-used UI settings in %TEMP%\Get-TSxLatestWindowsUpdate\Settings.
+    Loads and saves last-used UI settings in %TEMP%\Get-TSxWindowsUpdate\Settings.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -44,7 +44,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TS
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate'
+$script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxWindowsUpdate'
 $script:LogFilePath = Join-Path -Path $script:LogRootPath -ChildPath ('{0}.log' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
 $script:SettingsDirectory = Join-Path -Path $script:LogRootPath -ChildPath 'Settings'
 $script:SettingsFile = Join-Path -Path $script:SettingsDirectory -ChildPath ('{0}.settings.json' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))

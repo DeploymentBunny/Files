@@ -12,6 +12,9 @@ Optional piped object that contains an EsdPath, FilePath, or FullName property.
 .PARAMETER EsdPath
 Path to the source ESD file.
 
+.PARAMETER NoProgress
+Suppresses host progress output.
+
 .EXAMPLE
 .\Get-TSxESDInfo.ps1 -EsdPath "C:\Temp\ESD\install.esd"
 
@@ -20,7 +23,7 @@ $download | .\Get-TSxESDInfo.ps1
 
 .NOTES
 	FileName:    Get-TSxESDInfo.ps1
-	Version:     1.1.7
+	Version:     1.1.8
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
@@ -38,7 +41,8 @@ param(
 	[Parameter(ValueFromPipeline = $true)]
 	[object]$InputObject,
 
-	[string]$EsdPath
+	[string]$EsdPath,
+	[switch]$NoProgress
 )
 
 Set-StrictMode -Version Latest
@@ -73,6 +77,50 @@ if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
 Write-TSxLog -Message 'Script start.' -WriteVerbose
+
+function Write-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Status,
+
+		[int]$PercentComplete = -1
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	if ($PercentComplete -ge 0) {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status -PercentComplete $PercentComplete
+	}
+	else {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status
+	}
+}
+
+function Complete-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	Write-Progress -Id $Id -Activity $Activity -Completed
+}
 
 function Write-InfoStatus {
 	[CmdletBinding()]
@@ -175,13 +223,22 @@ function Get-EsdImageInfo {
 			throw 'Unable to start DISM process.'
 		}
 
-		if (-not $process.WaitForExit(300000)) {
-			try {
-				$process.Kill()
-			} catch {
+		$waitTimeout = [TimeSpan]::FromMinutes(5)
+		$waitStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+		while (-not $process.WaitForExit(1000)) {
+			if ($waitStopwatch.Elapsed -ge $waitTimeout) {
+				try {
+					$process.Kill()
+				} catch {
+				}
+				Complete-TSxProgress -Id 1200 -Activity 'Reading ESD metadata'
+				throw 'Timed out waiting for DISM command to complete.'
 			}
-			throw 'Timed out waiting for DISM command to complete.'
+
+			$elapsedText = '{0:00}:{1:00}' -f [int]$waitStopwatch.Elapsed.TotalMinutes, [int]$waitStopwatch.Elapsed.Seconds
+			Write-TSxProgress -Id 1200 -Activity 'Reading ESD metadata' -Status ("DISM is running... {0} elapsed" -f $elapsedText)
 		}
+		Complete-TSxProgress -Id 1200 -Activity 'Reading ESD metadata'
 
 		$stdout = $process.StandardOutput.ReadToEnd()
 		$stderr = $process.StandardError.ReadToEnd()
@@ -292,8 +349,13 @@ try {
 		$items.Add($null)
 	}
 
+	$totalItems = $items.Count
+	$itemIndex = 0
 	foreach ($item in $items) {
+		$itemIndex++
 		$resolvedEsdPath = Resolve-EsdSourcePath -InputObject $item -EsdPath $EsdPath
+		$itemPercentComplete = if ($totalItems -gt 0) { [int](($itemIndex / $totalItems) * 100) } else { 0 }
+		Write-TSxProgress -Id 1201 -Activity 'Inspecting ESD files' -Status ("Preparing {0} ({1}/{2})" -f [System.IO.Path]::GetFileName($resolvedEsdPath), $itemIndex, $totalItems) -PercentComplete $itemPercentComplete
 		Write-InfoStatus "Preparing ESD info read. Source: $resolvedEsdPath"
 
 		if (-not (Test-IsAdministrator)) {
@@ -319,6 +381,7 @@ try {
 			}
 		}
 	}
+	Complete-TSxProgress -Id 1201 -Activity 'Inspecting ESD files'
 } catch {
 	Write-TSxLog -Level 'ERROR' -Message "Unhandled error: $($_.Exception.Message)" -WriteVerbose
 	throw

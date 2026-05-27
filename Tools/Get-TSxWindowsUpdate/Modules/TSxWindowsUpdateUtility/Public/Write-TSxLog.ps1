@@ -21,7 +21,7 @@ function Write-TSxLog {
 
     if ([string]::IsNullOrWhiteSpace($LogFilePath)) {
         $tempRoot = if ([string]::IsNullOrWhiteSpace($env:TEMP)) { [System.IO.Path]::GetTempPath() } else { $env:TEMP }
-        $fallbackRoot = Join-Path -Path $tempRoot -ChildPath 'Get-TSxLatestWindowsUpdate'
+        $fallbackRoot = Join-Path -Path $tempRoot -ChildPath 'Get-TSxWindowsUpdate'
         if (-not (Test-Path -Path $fallbackRoot)) {
             $null = New-Item -Path $fallbackRoot -ItemType Directory -Force
         }

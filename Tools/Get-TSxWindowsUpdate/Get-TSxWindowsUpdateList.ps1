@@ -51,11 +51,11 @@
 
 .NOTES
 	FileName:    Get-TSxWindowsUpdateList.ps1
-	Version:     1.2.15
+	Version:     1.2.16
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
-	Updated:     2026-05-26
+	Updated:     2026-05-27
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -114,7 +114,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TS
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxLatestWindowsUpdate'
+$script:LogRootPath = Join-Path -Path $env:TEMP -ChildPath 'Get-TSxWindowsUpdate'
 $script:LogFilePath = Join-Path -Path $script:LogRootPath -ChildPath ('{0}.log' -f [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath))
 
 if ($PSBoundParameters.ContainsKey('IncludeCumulative')) { $script:IncludeCumulativeEffective = [bool]$IncludeCumulative } else { $script:IncludeCumulativeEffective = $true }

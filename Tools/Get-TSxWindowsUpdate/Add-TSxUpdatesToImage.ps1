@@ -3,7 +3,7 @@
 	Injects MSU updates into an offline WIM or VHDX image.
 
 .DESCRIPTION
-	Mounts an image in place and injects one or more .msu packages into the offline image using DISM.
+	Mounts an image in place and injects one or more update packages (.msu/.cab) into the offline image using DISM.
 	Supports WIM servicing through Mount-WindowsImage / Add-WindowsPackage / Dismount-WindowsImage,
 	and VHDX servicing through Mount-VHD plus Add-WindowsPackage against the offline Windows volume.
 
@@ -11,7 +11,7 @@
 	Path to the image file (.wim or .vhdx) to service in place.
 
 .PARAMETER UpdatePath
-	Path to a folder containing .msu files, or a direct path to a single .msu file.
+	Path to a folder containing .msu/.cab files, or a direct path to a single .msu/.cab file.
 
 .PARAMETER Index
 	WIM index to service. Only used when the image is a .wim file. Default: 1.
@@ -27,11 +27,11 @@
 
 .NOTES
 	FileName:    Add-TSxUpdatesToImage.ps1
-	Version:     1.0.4
+	Version:     1.0.7
 	Author:      Mikael Nystrom
 	Contact:     @mikael_nystrom
 	Created:     2026-05-22
-	Updated:     2026-05-25
+	Updated:     2026-05-27
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -41,7 +41,7 @@
 	https://www.deploymentbunny.com
 
 .FUNCTIONALITY
-	Serves as an offline image servicing front end for injecting MSU updates into WIM and VHDX images.
+	Serves as an offline image servicing front end for injecting MSU/CAB updates into WIM and VHDX images.
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
@@ -66,7 +66,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'Modules\TSxWindowsUpdateUtility\TS
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:LogRootPath = Join-Path $env:TEMP 'Get-TSxLatestWindowsUpdate'
+$script:LogRootPath = Join-Path $env:TEMP 'Get-TSxWindowsUpdate'
 $script:LogFilePath = Join-Path $script:LogRootPath 'Add-TSxUpdatesToImage.log'
 
 if (-not (Test-Path -Path $script:LogRootPath)) {
@@ -95,6 +95,34 @@ if ($ScratchDirectory) {
 		if ($PSCmdlet.ShouldProcess($ScratchDirectory, 'Create scratch directory')) {
 			$null = New-Item -Path $ScratchDirectory -ItemType Directory -Force
 		}
+	}
+
+	try {
+		$resolvedScratchPath = (Resolve-Path -Path $ScratchDirectory -ErrorAction Stop).Path
+		$scratchRoot = Split-Path -Path $resolvedScratchPath -Qualifier
+		$minimumScratchFreeBytes = [int64]10GB
+
+		if (-not [string]::IsNullOrWhiteSpace($scratchRoot)) {
+			$driveName = $scratchRoot.TrimEnd(':', '\\')
+			$scratchDrive = Get-PSDrive -Name $driveName -ErrorAction Stop
+			$freeBytes = [int64]$scratchDrive.Free
+
+			if ($freeBytes -lt $minimumScratchFreeBytes) {
+				$freeGb = [math]::Round(($freeBytes / 1GB), 2)
+				$minGb = [math]::Round(($minimumScratchFreeBytes / 1GB), 0)
+				$warningMessage = ('ScratchDirectory "{0}" has only {1} GB free. At least {2} GB is recommended for offline servicing. Low free space can cause DISM failures or unstable servicing behavior.' -f $resolvedScratchPath, $freeGb, $minGb)
+				Write-Warning $warningMessage
+				Write-TSxLog -Level 'WARN' -Message $warningMessage
+			}
+			else {
+				Write-TSxLog -Message ('ScratchDirectory free space check passed: {0} GB available at {1}.' -f [math]::Round(($freeBytes / 1GB), 2), $resolvedScratchPath)
+			}
+		}
+	}
+	catch {
+		$spaceCheckWarning = ('Unable to validate free space for ScratchDirectory "{0}". Continue with caution. Error: {1}' -f $ScratchDirectory, $_.Exception.Message)
+		Write-Warning $spaceCheckWarning
+		Write-TSxLog -Level 'WARN' -Message $spaceCheckWarning
 	}
 }
 

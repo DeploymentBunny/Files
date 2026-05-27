@@ -24,6 +24,9 @@ Optional version filter matching OS version, build, or build version.
 .PARAMETER OSLicense
 Optional activation channel filter, for example Retail or Volume.
 
+.PARAMETER NoProgress
+Suppresses host progress output.
+
 .PARAMETER OSName
 Optional operating system name filter, for example Windows 10 or Windows 11.
 
@@ -32,11 +35,11 @@ Optional operating system name filter, for example Windows 10 or Windows 11.
 
 .NOTES
 	FileName:    Show-TSxESDFiles.ps1
-	Version:     1.2.8
+	Version:     1.2.10
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-22
+	Updated:     2026-05-27
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -56,7 +59,8 @@ param(
 	[ValidateSet('Windows 10', 'Windows 11')]
 	[string]$OSName,
 	[ValidateSet('Volume', 'Retail')]
-	[string]$OSLicense
+	[string]$OSLicense,
+	[switch]$NoProgress
 )
 
 Set-StrictMode -Version Latest
@@ -90,6 +94,50 @@ if (-not (Test-Path -Path $Script:LogRootPath)) {
 	New-Item -Path $Script:LogRootPath -ItemType Directory -Force | Out-Null
 }
 Write-TSxLog -Message "Script start. AsJson=$($AsJson.IsPresent); CatalogPath=$CatalogPath; OSName=$OSName" -WriteVerbose
+
+function Write-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Status,
+
+		[int]$PercentComplete = -1
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	if ($PercentComplete -ge 0) {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status -PercentComplete $PercentComplete
+	}
+	else {
+		Write-Progress -Id $Id -Activity $Activity -Status $Status
+	}
+}
+
+function Complete-TSxProgress {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[int]$Id,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Activity
+	)
+
+	if ($NoProgress) {
+		return
+	}
+
+	Write-Progress -Id $Id -Activity $Activity -Completed
+}
 
 # Catalog XML files (MCT format) ship alongside this script in the Catalogs subfolder.
 # To use a different set of XML files, supply -CatalogPath.
@@ -210,7 +258,12 @@ function Get-OSDCloudCatalogNodes {
 
 	$xmlFiles = Get-ChildItem -Path $Path -Filter '*.xml' -File -Recurse | Sort-Object FullName
 	Write-TSxLog -Message "Discovered $(Get-CollectionCount -InputObject $xmlFiles) catalog XML file(s) in path: $Path"
+	$totalXmlFiles = Get-CollectionCount -InputObject $xmlFiles
+	$fileIndex = 0
 	foreach ($file in $xmlFiles) {
+		$fileIndex++
+		$xmlPercentComplete = if ($totalXmlFiles -gt 0) { [int](($fileIndex / $totalXmlFiles) * 100) } else { 0 }
+		Write-TSxProgress -Id 1100 -Activity 'Loading ESD catalogs' -Status ("Reading {0} ({1}/{2})" -f $file.Name, $fileIndex, $totalXmlFiles) -PercentComplete $xmlPercentComplete
 		$xml = [xml](Get-Content -Path $file.FullName -Raw)
 		$fileNodes = $xml.MCT.Catalogs.Catalog.PublishedMedia.Files.File
 		if (-not $fileNodes) { continue }
@@ -218,6 +271,7 @@ function Get-OSDCloudCatalogNodes {
 			$nodes.Add($node)
 		}
 	}
+	Complete-TSxProgress -Id 1100 -Activity 'Loading ESD catalogs'
 
 	return $nodes
 }
@@ -233,8 +287,13 @@ function Get-OSDCloudEsdFiles {
 
 	$results = New-Object System.Collections.Generic.List[object]
 	$seenIds = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+	$totalCatalogNodes = Get-CollectionCount -InputObject $catalogNodes
+	$catalogNodeIndex = 0
 
 	foreach ($node in $catalogNodes) {
+		$catalogNodeIndex++
+		$nodePercentComplete = if ($totalCatalogNodes -gt 0) { [int](($catalogNodeIndex / $totalCatalogNodes) * 100) } else { 0 }
+		Write-TSxProgress -Id 1101 -Activity 'Processing ESD entries' -Status ("Processing entry {0}/{1}" -f $catalogNodeIndex, $totalCatalogNodes) -PercentComplete $nodePercentComplete
 		$fileName = Get-NodePropertyValue -Node $node -Names @('FileName', 'Filename')
 		if (-not $fileName) { continue }
 		if ($fileName -notmatch '(?i)\.esd$') { continue }
@@ -305,6 +364,7 @@ function Get-OSDCloudEsdFiles {
 	}
 
 	Write-TSxLog -Message "Catalog parsing complete. Collected $($results.Count) ESD record(s) before final sort."
+	Complete-TSxProgress -Id 1101 -Activity 'Processing ESD entries'
 	$results |
 		Sort-Object -Property FileName -Unique |
 		Sort-Object -Property @{ Expression = { $_.OperatingSystem }; Descending = $true }, OSArchitecture, OSActivation, OSLanguageCode
