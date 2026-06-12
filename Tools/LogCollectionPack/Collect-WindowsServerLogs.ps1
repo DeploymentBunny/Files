@@ -622,7 +622,7 @@ try {
             if ($gpoNodes) {
                 foreach ($gpo in $gpoNodes) {
                     $appliedGpos.Add([PSCustomObject]@{
-                        Scope     = $scope -replace 'Results',''
+                        Scope     = ($scope -replace 'Results','')
                         Name      = $gpo.Name
                         Enabled   = $gpo.Enabled
                         Allowed   = $gpo.FilterAllowed
