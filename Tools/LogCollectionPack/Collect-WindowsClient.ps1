@@ -42,7 +42,7 @@
 
 .NOTES
     FileName:  Collect-WindowsClient.ps1
-    Version:   1.1.0
+    Version:   1.2.0
     Updated:   2026-06-12
     Author:    Mikael Nystrom
     Contact:   deploymentbunny@outlook.com
@@ -1691,13 +1691,9 @@ function Convert-EvtxForAnalytic {
     param([Parameter(Mandatory)][string]$EvtxPath)
 
     $baseName = [IO.Path]::GetFileNameWithoutExtension($EvtxPath)
-    $txtPath  = Join-Path $convDir "$baseName.txt"
-    $xmlPath  = Join-Path $convDir "$baseName.xml"
     $csvPath  = Join-Path $convDir "$baseName.csv"
     $max      = [Math]::Max($EvtxMaxEvents, 1)
 
-    try { wevtutil qe "$EvtxPath" /lf:true /rd:true /f:Text /c:$max | Out-File -FilePath $txtPath -Encoding UTF8 -Force } catch {}
-    try { wevtutil qe "$EvtxPath" /lf:true /rd:true /f:XML  /c:$max | Out-File -FilePath $xmlPath -Encoding UTF8 -Force } catch {}
     try {
         Get-WinEvent -Path $EvtxPath -MaxEvents $max -ErrorAction Stop |
             Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
@@ -1804,7 +1800,7 @@ try {
 catch {}
 
 $readme = @"
-Windows Client Health & Diagnostics Collection (v1.1.0)
+Windows Client Health & Diagnostics Collection (v1.2.0)
 Computer:  $computer
 Timestamp: $timestamp
 
