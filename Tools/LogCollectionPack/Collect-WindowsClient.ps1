@@ -10,7 +10,7 @@
     Windows Update state, Windows Defender and firewall posture, reliability monitor data,
     performance counters, and event logs for Windows 7, 10, and 11.
 
-    Exported EVTX files are converted to TXT, XML, and CSV for easier analytics consumption.
+    Exported EVTX files are converted to CSV for easier analytics consumption.
     Use -Verbose for detailed progress and decision logging.
 
     The script is read-only from a system-configuration perspective and only writes collection
@@ -23,6 +23,8 @@
     Duration to sample performance counters (minutes). Default: 5.
 .PARAMETER SampleIntervalSeconds
     Sampling interval for performance counters (seconds). Default: 5.
+.PARAMETER SkipPerformance
+    Skips performance counter collection and quick performance snapshot.
 .PARAMETER DeepHealth
     Runs DISM /ScanHealth and SFC /verifyonly (read-only; can take several minutes).
 .PARAMETER IncludeFullCBS
@@ -32,9 +34,15 @@
 .PARAMETER ValidateCounters
     Pre-tests performance counters and excludes unavailable ones.
 .PARAMETER ExcludeEvtxFromZip
-    Excludes .evtx files from the ZIP. Converted TXT/XML/CSV outputs are still included.
+    Excludes .evtx files from the ZIP. Converted CSV outputs are still included.
 .PARAMETER EvtxMaxEvents
-    Maximum events per log during EVTX conversion. Default: 100000.
+    Maximum events per log during EVTX conversion. Default: 25000.
+.PARAMETER EvtxDaysBack
+    Convert only events from the last N days during EVTX conversion. Default: 30.
+.PARAMETER IncludeEventMessage
+    Includes full event Message text in EVTX CSV conversion. This is slower.
+.PARAMETER EvtxPerFileTimeoutSeconds
+    Maximum seconds to spend converting a single EVTX file before skipping it. Default: 180.
 .PARAMETER SelfTest
     Runs static parse audit and exits (no elevation required).
 .PARAMETER ValidateOnly
@@ -42,7 +50,7 @@
 
 .NOTES
     FileName:  Collect-WindowsClient.ps1
-    Version:   1.2.0
+    Version:   1.7.2
     Updated:   2026-06-12
     Author:    Mikael Nystrom
     Contact:   deploymentbunny@outlook.com
@@ -57,12 +65,16 @@ param(
     [string]$OutputRoot = "$env:SystemDrive\WC-Diagnostics",
     [int]$DurationMinutes = 5,
     [int]$SampleIntervalSeconds = 5,
+    [switch]$SkipPerformance,
     [switch]$DeepHealth,
     [switch]$IncludeFullCBS,
     [switch]$NoZip,
     [switch]$ValidateCounters,
     [switch]$ExcludeEvtxFromZip,
-    [int]$EvtxMaxEvents = 100000,
+    [int]$EvtxMaxEvents = 25000,
+    [int]$EvtxDaysBack = 30,
+    [switch]$IncludeEventMessage,
+    [int]$EvtxPerFileTimeoutSeconds = 180,
     [switch]$SelfTest,
     [Alias('ValidateOnly')]
     [switch]$StaticAuditOnly
@@ -504,26 +516,29 @@ try {
 }
 catch {}
 
-# Installed applications
+# Installed applications (classic + modern where available)
 try {
     $uninstallPaths = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
         'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
     )
-    $apps = foreach ($uPath in $uninstallPaths) {
+
+    $classicApps = foreach ($uPath in $uninstallPaths) {
         try {
             Get-ChildItem -LiteralPath $uPath -ErrorAction Stop | ForEach-Object {
                 try {
                     $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction Stop
                     if ($p.DisplayName) {
                         [PSCustomObject]@{
+                            AppType         = 'Classic'
                             DisplayName     = $p.DisplayName
                             DisplayVersion  = $p.DisplayVersion
                             Publisher       = $p.Publisher
                             InstallDate     = $p.InstallDate
                             InstallLocation = $p.InstallLocation
                             Source          = $uPath
+                            PackageFullName = $null
                         }
                     }
                 }
@@ -532,7 +547,53 @@ try {
         }
         catch {}
     }
-    if ($apps) { Save-ObjectCsv ($apps | Sort-Object DisplayName) (Join-Path $sysDir 'InstalledApplications.csv') }
+
+    if ($classicApps) {
+        Save-ObjectCsv ($classicApps | Sort-Object DisplayName, DisplayVersion) (Join-Path $sysDir 'InstalledApplications.csv')
+        Save-ObjectCsv ($classicApps | Sort-Object DisplayName, DisplayVersion) (Join-Path $sysDir 'InstalledApplications_Classic.csv')
+    }
+
+    $modernApps = @()
+    try {
+        $appxCmd = Get-Command Get-AppxPackage -ErrorAction SilentlyContinue
+        if ($appxCmd) {
+            $modernApps = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+                Select-Object @{
+                    n = 'AppType'; e = { 'ModernAppx' }
+                }, @{
+                    n = 'DisplayName'; e = { if ($_.Name) { $_.Name } else { $_.PackageFamilyName } }
+                }, @{
+                    n = 'DisplayVersion'; e = { $_.Version }
+                }, @{
+                    n = 'Publisher'; e = { $_.Publisher }
+                }, @{
+                    n = 'InstallDate'; e = { $null }
+                }, @{
+                    n = 'InstallLocation'; e = { $_.InstallLocation }
+                }, @{
+                    n = 'Source'; e = { 'Get-AppxPackage -AllUsers' }
+                }, @{
+                    n = 'PackageFullName'; e = { $_.PackageFullName }
+                }
+        }
+    }
+    catch {}
+
+    if ($modernApps -and @($modernApps).Count -gt 0) {
+        Save-ObjectCsv ($modernApps | Sort-Object DisplayName, DisplayVersion) (Join-Path $sysDir 'InstalledApplications_ModernAppx.csv')
+    }
+    else {
+        'Get-AppxPackage is unavailable or returned no packages on this OS.' |
+            Out-File -FilePath (Join-Path $sysDir 'InstalledApplications_ModernAppx_NotAvailable.txt') -Encoding UTF8 -Force
+    }
+
+    $allApps = @()
+    if ($classicApps) { $allApps += $classicApps }
+    if ($modernApps)  { $allApps += $modernApps }
+
+    if ($allApps -and @($allApps).Count -gt 0) {
+        Save-ObjectCsv ($allApps | Sort-Object AppType, DisplayName, DisplayVersion) (Join-Path $sysDir 'InstalledApplications_All.csv')
+    }
 }
 catch {}
 
@@ -1155,7 +1216,7 @@ if ($cs -and $cs.PartOfDomain) {
 
             if ($smbPort) {
                 try {
-                    $unc  = "\\\\$dc\\SYSVOL"
+                    $unc  = "\\$dc\SYSVOL"
                     $null = Get-ChildItem -LiteralPath $unc -ErrorAction Stop
                     $sysvolList = $true
                 }
@@ -1368,93 +1429,102 @@ Write-Detail "Memory collection completed"
 # ============================================================================================
 # 10. PERFORMANCE COUNTERS
 # ============================================================================================
-Write-Section "Sampling performance counters"
 $perfDir = Join-Path $OutDir 'Performance'
 $null = New-Item -ItemType Directory -Force -Path $perfDir | Out-Null
 
-$cpuCounters = @(
-    '\Processor(_Total)\% Processor Time',
-    '\System\Processor Queue Length',
-    '\Processor Information(_Total)\% Privileged Time',
-    '\Processor Information(_Total)\% User Time'
-)
-$memCounters = @(
-    '\Memory\Available MBytes',
-    '\Memory\Pages/sec',
-    '\Memory\Page Faults/sec',
-    '\Paging File(_Total)\% Usage',
-    '\Memory\Cache Faults/sec',
-    '\Memory\Committed Bytes'
-)
-$diskCounters = @(
-    '\PhysicalDisk(_Total)\% Disk Time',
-    '\PhysicalDisk(_Total)\Avg. Disk sec/Read',
-    '\PhysicalDisk(_Total)\Avg. Disk sec/Write',
-    '\PhysicalDisk(_Total)\Disk Reads/sec',
-    '\PhysicalDisk(_Total)\Disk Writes/sec',
-    '\PhysicalDisk(_Total)\Current Disk Queue Length',
-    '\LogicalDisk(_Total)\% Free Space'
-)
-$netCounters = @(
-    '\Network Interface(*)\Bytes Total/sec',
-    '\Network Interface(*)\Output Queue Length',
-    '\Network Interface(*)\Packets Received Errors',
-    '\Network Interface(*)\Packets Outbound Errors',
-    '\TCPv4\Connections Established'
-)
-
-$allCounters = $cpuCounters + $memCounters + $diskCounters + $netCounters
-
-if ($ValidateCounters) {
-    Write-Host "Validating counters (one-time probe) ..."
-    $allCounters = Test-CounterPresent -Counters $allCounters
+if ($SkipPerformance) {
+    Write-Section "Skipping performance collectors"
+    "Performance collection skipped via -SkipPerformance." |
+        Out-File -FilePath (Join-Path $perfDir 'PerformanceSkipped.txt') -Encoding UTF8 -Force
+    Write-Detail "Performance counter collection skipped"
 }
+else {
+    Write-Section "Sampling performance counters"
 
-$maxSamples = [int][Math]::Ceiling(($DurationMinutes * 60) / [Math]::Max($SampleIntervalSeconds, 1))
-$blgPath  = Join-Path $perfDir 'PerfSamples.blg'
-$csvPath  = Join-Path $perfDir 'PerfSamples.csv'
-$metaPath = Join-Path $perfDir 'PerfMeta.txt'
+    $cpuCounters = @(
+        '\Processor(_Total)\% Processor Time',
+        '\System\Processor Queue Length',
+        '\Processor Information(_Total)\% Privileged Time',
+        '\Processor Information(_Total)\% User Time'
+    )
+    $memCounters = @(
+        '\Memory\Available MBytes',
+        '\Memory\Pages/sec',
+        '\Memory\Page Faults/sec',
+        '\Paging File(_Total)\% Usage',
+        '\Memory\Cache Faults/sec',
+        '\Memory\Committed Bytes'
+    )
+    $diskCounters = @(
+        '\PhysicalDisk(_Total)\% Disk Time',
+        '\PhysicalDisk(_Total)\Avg. Disk sec/Read',
+        '\PhysicalDisk(_Total)\Avg. Disk sec/Write',
+        '\PhysicalDisk(_Total)\Disk Reads/sec',
+        '\PhysicalDisk(_Total)\Disk Writes/sec',
+        '\PhysicalDisk(_Total)\Current Disk Queue Length',
+        '\LogicalDisk(_Total)\% Free Space'
+    )
+    $netCounters = @(
+        '\Network Interface(*)\Bytes Total/sec',
+        '\Network Interface(*)\Output Queue Length',
+        '\Network Interface(*)\Packets Received Errors',
+        '\Network Interface(*)\Packets Outbound Errors',
+        '\TCPv4\Connections Established'
+    )
 
-@"
+    $allCounters = $cpuCounters + $memCounters + $diskCounters + $netCounters
+
+    if ($ValidateCounters) {
+        Write-Host "Validating counters (one-time probe) ..."
+        $allCounters = Test-CounterPresent -Counters $allCounters
+    }
+
+    $maxSamples = [int][Math]::Ceiling(($DurationMinutes * 60) / [Math]::Max($SampleIntervalSeconds, 1))
+    $blgPath  = Join-Path $perfDir 'PerfSamples.blg'
+    $csvPath  = Join-Path $perfDir 'PerfSamples.csv'
+    $metaPath = Join-Path $perfDir 'PerfMeta.txt'
+
+    @"
 Sampling started: $(Get-Date -Format 's')
 Duration (min):   $DurationMinutes
 Interval (sec):   $SampleIntervalSeconds
 Total samples:    $maxSamples
 "@ | Out-File -FilePath $metaPath -Encoding UTF8
 
-if ($allCounters -and $allCounters.Count -gt 0) {
-    try {
-        Get-Counter -Counter $allCounters -SampleInterval $SampleIntervalSeconds -MaxSamples $maxSamples -ErrorAction Stop |
-            Export-Counter -Path $blgPath -FileFormat BLG
+    if ($allCounters -and $allCounters.Count -gt 0) {
+        try {
+            Get-Counter -Counter $allCounters -SampleInterval $SampleIntervalSeconds -MaxSamples $maxSamples -ErrorAction Stop |
+                Export-Counter -Path $blgPath -FileFormat BLG
+        }
+        catch { Write-Detail "BLG counter collection failed: $_" }
+        try {
+            Get-Counter -Counter $allCounters -SampleInterval $SampleIntervalSeconds -MaxSamples $maxSamples -ErrorAction Stop |
+                Export-Counter -Path $csvPath -FileFormat CSV
+        }
+        catch { Write-Detail "CSV counter collection failed: $_" }
     }
-    catch { Write-Detail "BLG counter collection failed: $_" }
+
+    # Quick point-in-time snapshot
     try {
-        Get-Counter -Counter $allCounters -SampleInterval $SampleIntervalSeconds -MaxSamples $maxSamples -ErrorAction Stop |
-            Export-Counter -Path $csvPath -FileFormat CSV
+        $memOS  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+        $cpuPct = $null; $cpuQ = $null; $pfPct = $null; $diskQ = $null
+        try { $cpuPct = (Get-Counter '\Processor(_Total)\% Processor Time'              -ErrorAction Stop).CounterSamples.CookedValue } catch {}
+        try { $cpuQ   = (Get-Counter '\System\Processor Queue Length'                    -ErrorAction Stop).CounterSamples.CookedValue } catch {}
+        try { $pfPct  = (Get-Counter '\Paging File(_Total)\% Usage'                      -ErrorAction Stop).CounterSamples.CookedValue } catch {}
+        try { $diskQ  = (Get-Counter '\PhysicalDisk(_Total)\Current Disk Queue Length'   -ErrorAction Stop).CounterSamples.CookedValue } catch {}
+        [PSCustomObject]@{
+            Timestamp           = (Get-Date)
+            CPU_PercentTotal    = $cpuPct
+            CPU_QueueLength     = $cpuQ
+            Mem_AvailableMB     = if ($memOS) { $memOS.FreePhysicalMemory / 1KB } else { $null }
+            PagingFile_UsagePct = $pfPct
+            Disk_QueueLength    = $diskQ
+        } | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $perfDir 'QuickSnapshot.csv')
     }
-    catch { Write-Detail "CSV counter collection failed: $_" }
-}
+    catch {}
 
-# Quick point-in-time snapshot
-try {
-    $memOS  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
-    $cpuPct = $null; $cpuQ = $null; $pfPct = $null; $diskQ = $null
-    try { $cpuPct = (Get-Counter '\Processor(_Total)\% Processor Time'              -ErrorAction Stop).CounterSamples.CookedValue } catch {}
-    try { $cpuQ   = (Get-Counter '\System\Processor Queue Length'                    -ErrorAction Stop).CounterSamples.CookedValue } catch {}
-    try { $pfPct  = (Get-Counter '\Paging File(_Total)\% Usage'                      -ErrorAction Stop).CounterSamples.CookedValue } catch {}
-    try { $diskQ  = (Get-Counter '\PhysicalDisk(_Total)\Current Disk Queue Length'   -ErrorAction Stop).CounterSamples.CookedValue } catch {}
-    [PSCustomObject]@{
-        Timestamp           = (Get-Date)
-        CPU_PercentTotal    = $cpuPct
-        CPU_QueueLength     = $cpuQ
-        Mem_AvailableMB     = if ($memOS) { $memOS.FreePhysicalMemory / 1KB } else { $null }
-        PagingFile_UsagePct = $pfPct
-        Disk_QueueLength    = $diskQ
-    } | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $perfDir 'QuickSnapshot.csv')
+    Write-Detail "Performance counter collection completed"
 }
-catch {}
-
-Write-Detail "Performance counter collection completed"
 
 # ============================================================================================
 # 11. RELIABILITY MONITOR DATA
@@ -1681,9 +1751,9 @@ $( ($skipped | ForEach-Object { "  - $_" }) -join "`n" )
 "@ | Out-File -FilePath (Join-Path $evDir 'FoundVsSkipped.txt') -Encoding UTF8
 
 # ============================================================================================
-# 13. EVTX AUTO-CONVERSION (TXT + XML + CSV)
+# 13. EVTX AUTO-CONVERSION (CSV)
 # ============================================================================================
-Write-Section "Converting EVTX logs (TXT/XML/CSV)"
+Write-Section "Converting EVTX logs (CSV)"
 $convDir = Join-Path $evDir 'Converted'
 $null = New-Item -ItemType Directory -Force -Path $convDir | Out-Null
 
@@ -1693,20 +1763,134 @@ function Convert-EvtxForAnalytic {
     $baseName = [IO.Path]::GetFileNameWithoutExtension($EvtxPath)
     $csvPath  = Join-Path $convDir "$baseName.csv"
     $max      = [Math]::Max($EvtxMaxEvents, 1)
+    $days     = [Math]::Max($EvtxDaysBack, 1)
+    $start    = (Get-Date).AddDays(-$days)
 
     try {
-        Get-WinEvent -Path $EvtxPath -MaxEvents $max -ErrorAction Stop |
-            Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
-            Export-Csv $csvPath -NoTypeInformation -Encoding UTF8
+        if ($IncludeEventMessage) {
+            Get-WinEvent -Path $EvtxPath -MaxEvents $max -ErrorAction Stop |
+                Where-Object { $_.TimeCreated -ge $start } |
+                Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
+                Export-Csv $csvPath -NoTypeInformation -Encoding UTF8
+        }
+        else {
+            # Fast mode: omit Message text because rendering localized message strings is expensive.
+            Get-WinEvent -Path $EvtxPath -MaxEvents $max -ErrorAction Stop |
+                Where-Object { $_.TimeCreated -ge $start } |
+                Select-Object TimeCreated, Id, LevelDisplayName, ProviderName |
+                Export-Csv $csvPath -NoTypeInformation -Encoding UTF8
+        }
     }
-    catch {}
+    catch {
+        throw
+    }
 }
 
 $evtxFiles = Get-ChildItem -Path $evDir -Filter *.evtx -ErrorAction SilentlyContinue
 Write-Detail ("EVTX files found for conversion: {0}" -f @($evtxFiles).Count)
-foreach ($f in $evtxFiles) {
-    Write-Verbose ("Converting EVTX: {0}" -f $f.Name)
-    Convert-EvtxForAnalytic -EvtxPath $f.FullName
+$conversionIssues = New-Object System.Collections.Generic.List[object]
+for ($i = 0; $i -lt @($evtxFiles).Count; $i++) {
+    $f = $evtxFiles[$i]
+    Write-Verbose ("Converting EVTX [{0}/{1}]: {2}" -f ($i + 1), @($evtxFiles).Count, $f.Name)
+
+    $baseName = [IO.Path]::GetFileNameWithoutExtension($f.FullName)
+    $csvPath  = Join-Path $convDir "$baseName.csv"
+    $max      = [Math]::Max($EvtxMaxEvents, 1)
+    $days     = [Math]::Max($EvtxDaysBack, 1)
+    $start    = (Get-Date).AddDays(-$days)
+    $withMessage = $IncludeEventMessage.IsPresent
+
+    # Pre-flight: check whether the file contains at least one event within the time window.
+    # This avoids launching a background job for empty or out-of-window logs.
+    $hasData = $false
+    try {
+        $probe = Get-WinEvent -Path $f.FullName -MaxEvents 1 -ErrorAction Stop |
+            Where-Object { $_.TimeCreated -ge $start }
+        $hasData = ($null -ne $probe)
+    }
+    catch {
+        # NoMatchingEventsException means the log exists but has no events at all - skip silently.
+        if ($_.Exception.GetType().Name -eq 'NoMatchingEventsException' -or
+            $_.Exception.Message -match 'No events were found') {
+            Write-Verbose ("Skipping {0}: no events in log" -f $f.Name)
+        }
+        else {
+            # Unexpected read error - record it and move on.
+            $conversionIssues.Add([PSCustomObject]@{
+                File  = $f.FullName
+                Name  = $f.Name
+                Error = "Pre-flight read error: $($_.Exception.Message)"
+                When  = Get-Date
+            }) | Out-Null
+            Write-Warning ("EVTX pre-flight failed for {0}: {1}" -f $f.Name, $_.Exception.Message)
+        }
+        continue
+    }
+
+    if (-not $hasData) {
+        Write-Verbose ("Skipping {0}: no events within the last {1} days" -f $f.Name, $days)
+        continue
+    }
+
+    $job = Start-Job -ScriptBlock {
+        param(
+            [string]$EvtxPath,
+            [string]$CsvPath,
+            [int]$Max,
+            [datetime]$Start,
+            [bool]$WithMessage
+        )
+
+        $ErrorActionPreference = 'Stop'
+        if ($WithMessage) {
+            Get-WinEvent -Path $EvtxPath -MaxEvents $Max -ErrorAction Stop |
+                Where-Object { $_.TimeCreated -ge $Start } |
+                Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
+                Export-Csv $CsvPath -NoTypeInformation -Encoding UTF8
+        }
+        else {
+            Get-WinEvent -Path $EvtxPath -MaxEvents $Max -ErrorAction Stop |
+                Where-Object { $_.TimeCreated -ge $Start } |
+                Select-Object TimeCreated, Id, LevelDisplayName, ProviderName |
+                Export-Csv $CsvPath -NoTypeInformation -Encoding UTF8
+        }
+    } -ArgumentList $f.FullName, $csvPath, $max, $start, $withMessage
+
+    $completed = Wait-Job -Job $job -Timeout ([Math]::Max($EvtxPerFileTimeoutSeconds, 10))
+    if (-not $completed) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue | Out-Null
+        $conversionIssues.Add([PSCustomObject]@{
+            File  = $f.FullName
+            Name  = $f.Name
+            Error = "Timed out after $EvtxPerFileTimeoutSeconds seconds"
+            When  = Get-Date
+        }) | Out-Null
+        Write-Warning ("EVTX conversion timed out for {0} after {1}s" -f $f.Name, $EvtxPerFileTimeoutSeconds)
+        continue
+    }
+
+    $jobState = $job.State
+    if ($jobState -ne 'Completed') {
+        $reason = $null
+        try { $reason = $job.ChildJobs[0].JobStateInfo.Reason.Message } catch {}
+        if (-not $reason) { $reason = "Job ended with state: $jobState" }
+        $conversionIssues.Add([PSCustomObject]@{
+            File  = $f.FullName
+            Name  = $f.Name
+            Error = $reason
+            When  = Get-Date
+        }) | Out-Null
+        Write-Warning ("EVTX conversion failed for {0}: {1}" -f $f.Name, $reason)
+    }
+
+    # Drain job output/errors and remove job to avoid accumulation over many files.
+    try { Receive-Job -Job $job -ErrorAction SilentlyContinue | Out-Null } catch {}
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue | Out-Null
+}
+
+if ($conversionIssues.Count -gt 0) {
+    Save-ObjectCsv $conversionIssues (Join-Path $convDir 'ConversionIssues.csv')
 }
 
 [GC]::Collect()
@@ -1800,7 +1984,7 @@ try {
 catch {}
 
 $readme = @"
-Windows Client Health & Diagnostics Collection (v1.2.0)
+Windows Client Health & Diagnostics Collection (v1.7.2)
 Computer:  $computer
 Timestamp: $timestamp
 
@@ -1830,7 +2014,7 @@ Folders:
 - Performance:       Perf counters (.blg + .csv), quick point-in-time snapshot
 - Reliability:       Win32_ReliabilityRecords, stability index (last 30 entries)
 - EventLogs:         Exported .evtx channels; see FoundVsSkipped.txt
-- EventLogs\Converted: EVTX converted to TXT/XML/CSV (capped by -EvtxMaxEvents)
+- EventLogs\Converted: EVTX converted to CSV (last -EvtxDaysBack days, capped by -EvtxMaxEvents)
 - Analytic-Ready:    Key CSV/TXT files consolidated for upload and analysis
 
 Key diagnostic event channels collected:
@@ -1846,6 +2030,10 @@ Key diagnostic event channels collected:
 Notes:
 - Run with -DeepHealth to add DISM /ScanHealth and SFC /verifyonly.
 - Run with -SelfTest to validate script syntax without collecting data.
+- Tune EVTX speed/scope with -EvtxDaysBack (default 30) and -EvtxMaxEvents.
+- Use -EvtxPerFileTimeoutSeconds to skip logs that hang during conversion.
+- Use -IncludeEventMessage when you need full event text in CSV (slower conversion).
+- If a specific EVTX file fails conversion, see EventLogs\Converted\ConversionIssues.csv.
 - Windows 7 requires WMF 5.1. Where newer cmdlets are unavailable the script falls back to WMI and CLI tools.
 "@
 $readme | Out-File -FilePath (Join-Path $OutDir 'README.txt') -Encoding UTF8
