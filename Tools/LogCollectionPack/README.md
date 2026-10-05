@@ -45,7 +45,7 @@ Yes. The script is designed for collection only.
 ## Before You Start
 You need:
 - A Windows 7, 10, or 11 machine (Windows 7 requires WMF 5.1)
-- PowerShell 5.1
+- PowerShell 4.0 or later (Windows PowerShell 4.0/5.1 or PowerShell 7+)
 - Administrator rights on that machine
 - Enough free disk space for logs and optional ZIP
 

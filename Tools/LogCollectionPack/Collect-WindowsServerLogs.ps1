@@ -7,12 +7,15 @@
     Collect-WindowsServerLogs gathers OS health and servicing data, event logs, role and feature inventory,
     performance counters (BLG and CSV), optional Java process metrics, and role-specific diagnostics
     for AD DS, AD CS, DNS, DHCP, Hyper-V, Failover Clustering, Storage Spaces Direct (S2D), and classic SAN (MPIO/iSCSI/FC) when detected.
+    When AD DS is detected, the script performs a deep Active Directory collection covering DC health (dcdiag),
+    replication (repadmin/DFSR), authentication (Kerberos/NTLM/secure channel), AD database/log files on disk,
+    NTDS configuration, and the AD module inventory (topology, replication metadata, trusts, password policy).
     Exported EVTX files are converted to TXT, XML, and CSV for easier analytics consumption.
     Java process metrics are collected automatically when java.exe processes are present.
     Use -Verbose for detailed progress and decision logging.
 
     The script is read-only from a system-configuration perspective and only writes collection artifacts.
-    Run from an elevated Windows PowerShell 5.1 session for full collection.
+    Run from an elevated Windows PowerShell 4.0 or later session for full collection.
 
 .PARAMETER OutputRoot
     Root folder for output. Default: C:\WS-Diagnostics.
@@ -39,11 +42,15 @@
 
 .NOTES
     FileName:  Collect-WindowsServerLogs.ps1
-    Version:   5.7.2
-    Updated:   2026-05-22
+    Version:   5.9.1
     Author:    Mikael Nystrom
     Contact:   deploymentbunny@outlook.com
+    Created:   2026-05-22
+    Updated:   2026-09-22
     Blog:      https://www.deploymentbunny.com
+
+.LINK
+    https://www.deploymentbunny.com
 #>
 
 [CmdletBinding()]
@@ -197,9 +204,12 @@ function Write-Detail {
 }
 
 function Test-Admin {
-    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $p  = New-Object Security.Principal.WindowsPrincipal($id)
-    return $p.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+    try {
+        $groupOutput = whoami.exe /groups 2>$null
+        return [bool]($groupOutput | Where-Object { $_ -match 'S-1-5-32-544' })
+    } catch {
+        return $false
+    }
 }
 
 if (-not (Test-Admin)) {
@@ -207,9 +217,9 @@ if (-not (Test-Admin)) {
     return
 }
 
-# Require Windows PowerShell 5.1
-if (-not ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -ge 1)) {
-    Write-Warning "Windows PowerShell 5.1 is required. Detected: $($PSVersionTable.PSVersion). Exiting."
+# Require Windows PowerShell 4.0 or later
+if (-not ($PSVersionTable.PSVersion.Major -ge 4)) {
+    Write-Warning "Windows PowerShell 4.0 or later is required. Detected: $($PSVersionTable.PSVersion). Exiting."
     return
 }
 
@@ -271,16 +281,16 @@ function Convert-DmtfSafe {
 
 function Test-CounterPresent {
     param([string[]]$Counters)
-    $valid = New-Object System.Collections.Generic.List[string]
+    $valid = @()
     foreach ($c in $Counters) {
         try {
             $null = Get-Counter -Counter $c -SampleInterval 1 -MaxSamples 1 -ErrorAction Stop
-            $valid.Add($c)
+            $valid += $c
         } catch {
             Write-Verbose "Skipping unavailable counter: $c"
         }
     }
-    return $valid.ToArray()
+    return $valid
 }
 
 function Get-ServerVersionInfo {
@@ -376,6 +386,20 @@ function Test-ImportModule {
 function Save-Text {
     param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$Text)
     try { $Text | Out-File -FilePath $Path -Encoding UTF8 -Force } catch { Write-Warning "Failed to write $Path : $_" }
+}
+
+function Compress-Folder {
+    param(
+        [Parameter(Mandatory)][string]$SourceFolder,
+        [Parameter(Mandatory)][string]$DestinationZip
+    )
+    # Compress-Archive requires PS 5.0; fall back to .NET ZipFile on PowerShell 4.0
+    if (Get-Command Compress-Archive -ErrorAction SilentlyContinue) {
+        Compress-Archive -Path $SourceFolder -DestinationPath $DestinationZip -CompressionLevel Optimal
+    } else {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($SourceFolder, $DestinationZip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+    }
 }
 
 function Convert-WerReportToObject {
@@ -615,20 +639,20 @@ try { & gpresult.exe /X "$gpXmlPath" /F 2>&1 | Out-Null } catch { Write-Warning 
 try {
     if (Test-Path -LiteralPath $gpXmlPath) {
         [xml]$gpXml = Get-Content -LiteralPath $gpXmlPath -Encoding UTF8 -ErrorAction Stop
-        $appliedGpos = New-Object System.Collections.Generic.List[object]
+        $appliedGpos = @()
 
         foreach ($scope in @('ComputerResults','UserResults')) {
             $gpoNodes = $gpXml.Rsop.$scope.GPO
             if ($gpoNodes) {
                 foreach ($gpo in $gpoNodes) {
-                    $appliedGpos.Add([PSCustomObject]@{
+                    $appliedGpos += [PSCustomObject]@{
                         Scope     = ($scope -replace 'Results','')
                         Name      = $gpo.Name
                         Enabled   = $gpo.Enabled
                         Allowed   = $gpo.FilterAllowed
                         LinkOrder = $gpo.Link.LinkOrder
                         SOMPath   = $gpo.Link.SOMPath
-                    })
+                    }
                 }
             }
         }
@@ -816,32 +840,281 @@ if ($roles.IsADDS) {
     $null = New-Item -ItemType Directory -Force -Path $adDir | Out-Null
 
     $domainName = Get-ComputerDomainName
+    $forestName = $null
+    $siteName   = $null
+    try { $forestName = ([System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()).Name } catch {}
+    try { $siteName   = ([System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite()).Name } catch {}
 
-    Invoke-AndSave -Title 'DCDiag (verbose)'        -FilePath 'dcdiag.exe'   -Arguments '/v /c /e'         -OutFile (Join-Path $adDir 'dcdiag.txt')
-    Invoke-AndSave -Title 'Repadmin ReplSummary'    -FilePath 'repadmin.exe' -Arguments '/replsummary'     -OutFile (Join-Path $adDir 'repadmin_replsummary.txt')
-    Invoke-AndSave -Title 'Repadmin ShowRepl (CSV)' -FilePath 'repadmin.exe' -Arguments '/showrepl * /csv' -OutFile (Join-Path $adDir 'repadmin_showrepl.csv.txt')
-    Invoke-AndSave -Title 'FSMO Roles'              -FilePath 'netdom.exe'   -Arguments 'query fsmo'       -OutFile (Join-Path $adDir 'fsmo_roles.txt')
+    # DC/forest summary snapshot for quick orientation
+    try {
+        [PSCustomObject]@{
+            ComputerName   = $env:COMPUTERNAME
+            DomainName     = $domainName
+            ForestName     = $forestName
+            SiteName       = $siteName
+            IsGlobalCatalog = $false  # refined below if AD module available
+            NTDSService    = (Get-Service -Name 'NTDS' -ErrorAction SilentlyContinue).Status
+            KDCService     = (Get-Service -Name 'Kdc' -ErrorAction SilentlyContinue).Status
+            NetlogonSvc    = (Get-Service -Name 'Netlogon' -ErrorAction SilentlyContinue).Status
+            DNSService     = (Get-Service -Name 'DNS' -ErrorAction SilentlyContinue).Status
+            DFSRService    = (Get-Service -Name 'DFSR' -ErrorAction SilentlyContinue).Status
+            W32TimeService = (Get-Service -Name 'W32Time' -ErrorAction SilentlyContinue).Status
+        } | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'AD_DC_Summary.csv')
+    } catch {}
 
-    if (-not [string]::IsNullOrWhiteSpace($domainName)) {
-        Invoke-AndSave -Title 'NLTEST DCLIST (domain)'  -FilePath 'nltest.exe' -Arguments "/dclist:$domainName" -OutFile (Join-Path $adDir 'nltest_dclist.txt')
-        Invoke-AndSave -Title 'NLTEST DSGETDC (domain)' -FilePath 'nltest.exe' -Arguments "/dsgetdc:$domainName" -OutFile (Join-Path $adDir 'nltest_dsgetdc.txt')
-    } else {
-        Save-Text -Path (Join-Path $adDir 'nltest_note.txt') -Text "Domain name could not be determined. Skipping nltest domain-targeted commands."
-    }
+    # ---------- Health ----------
+    Invoke-AndSave -Title 'DCDiag (verbose)'           -FilePath 'dcdiag.exe' -Arguments '/v /c /e'                    -OutFile (Join-Path $adDir 'dcdiag.txt')
+    Invoke-AndSave -Title 'DCDiag DNS'                 -FilePath 'dcdiag.exe' -Arguments '/test:dns /e /v'             -OutFile (Join-Path $adDir 'dcdiag_dns.txt')
+    Invoke-AndSave -Title 'DCDiag SysVolCheck'         -FilePath 'dcdiag.exe' -Arguments '/test:SysVolCheck /v'        -OutFile (Join-Path $adDir 'dcdiag_sysvol.txt')
+    Invoke-AndSave -Title 'DCDiag NetLogons'           -FilePath 'dcdiag.exe' -Arguments '/test:NetLogons /v'          -OutFile (Join-Path $adDir 'dcdiag_netlogons.txt')
+    Invoke-AndSave -Title 'DCDiag Services'            -FilePath 'dcdiag.exe' -Arguments '/test:Services /v'           -OutFile (Join-Path $adDir 'dcdiag_services.txt')
+    Invoke-AndSave -Title 'DCDiag Advertising'         -FilePath 'dcdiag.exe' -Arguments '/test:Advertising /v'        -OutFile (Join-Path $adDir 'dcdiag_advertising.txt')
+    Invoke-AndSave -Title 'FSMO Roles'                 -FilePath 'netdom.exe' -Arguments 'query fsmo'                  -OutFile (Join-Path $adDir 'fsmo_roles.txt')
+
+    # ---------- Replication ----------
+    Invoke-AndSave -Title 'Repadmin ReplSummary'       -FilePath 'repadmin.exe' -Arguments '/replsummary'              -OutFile (Join-Path $adDir 'repadmin_replsummary.txt')
+    Invoke-AndSave -Title 'Repadmin ReplSummary (all)' -FilePath 'repadmin.exe' -Arguments '/replsummary /bysrc /bydest' -OutFile (Join-Path $adDir 'repadmin_replsummary_all.txt')
+    Invoke-AndSave -Title 'Repadmin ShowRepl (CSV)'    -FilePath 'repadmin.exe' -Arguments '/showrepl * /csv'          -OutFile (Join-Path $adDir 'repadmin_showrepl.csv.txt')
+    Invoke-AndSave -Title 'Repadmin ShowRepl (text)'   -FilePath 'repadmin.exe' -Arguments '/showrepl *'               -OutFile (Join-Path $adDir 'repadmin_showrepl.txt')
+    Invoke-AndSave -Title 'Repadmin Queue'             -FilePath 'repadmin.exe' -Arguments '/queue'                    -OutFile (Join-Path $adDir 'repadmin_queue.txt')
+    Invoke-AndSave -Title 'Repadmin ShowConn'          -FilePath 'repadmin.exe' -Arguments '/showconn'                 -OutFile (Join-Path $adDir 'repadmin_showconn.txt')
+    Invoke-AndSave -Title 'Repadmin Bind'              -FilePath 'repadmin.exe' -Arguments '/bind'                     -OutFile (Join-Path $adDir 'repadmin_bind.txt')
+    Invoke-AndSave -Title 'Repadmin Options'           -FilePath 'repadmin.exe' -Arguments '/options *'                -OutFile (Join-Path $adDir 'repadmin_options.txt')
+    Invoke-AndSave -Title 'Repadmin ISTG'              -FilePath 'repadmin.exe' -Arguments '/istg *'                   -OutFile (Join-Path $adDir 'repadmin_istg.txt')
+    Invoke-AndSave -Title 'Repadmin Bridgeheads'       -FilePath 'repadmin.exe' -Arguments '/bridgeheads *'            -OutFile (Join-Path $adDir 'repadmin_bridgeheads.txt')
 
     if (Get-Command dfsrdiag.exe -ErrorAction SilentlyContinue) {
         Invoke-AndSave -Title 'DFSRDIAG ReplicationState' -FilePath 'dfsrdiag.exe' -Arguments 'ReplicationState' -OutFile (Join-Path $adDir 'dfsrdiag_replicationstate.txt')
         Invoke-AndSave -Title 'DFSRDIAG PollAD'           -FilePath 'dfsrdiag.exe' -Arguments 'PollAD'          -OutFile (Join-Path $adDir 'dfsrdiag_pollad.txt')
+        Invoke-AndSave -Title 'DFSRDIAG Backlog'          -FilePath 'dfsrdiag.exe' -Arguments 'Backlog'         -OutFile (Join-Path $adDir 'dfsrdiag_backlog.txt')
     }
 
+    # ---------- Authentication / secure channel ----------
+    Invoke-AndSave -Title 'KList (tickets)'            -FilePath 'klist.exe'  -Arguments ''                            -OutFile (Join-Path $adDir 'klist_tickets.txt')
+    Invoke-AndSave -Title 'KList system tickets'       -FilePath 'klist.exe'  -Arguments '-li 0x3e7'                   -OutFile (Join-Path $adDir 'klist_system.txt')
+    Invoke-AndSave -Title 'KList TGT'                  -FilePath 'klist.exe'  -Arguments 'tgt'                         -OutFile (Join-Path $adDir 'klist_tgt.txt')
+    Invoke-AndSave -Title 'W32TM status'               -FilePath 'w32tm.exe'  -Arguments '/query /status /verbose'     -OutFile (Join-Path $adDir 'w32tm_status_verbose.txt')
+
+    if (-not [string]::IsNullOrWhiteSpace($domainName)) {
+        Invoke-AndSave -Title 'NLTEST DCLIST (domain)'       -FilePath 'nltest.exe' -Arguments "/dclist:$domainName"      -OutFile (Join-Path $adDir 'nltest_dclist.txt')
+        Invoke-AndSave -Title 'NLTEST DSGETDC (domain)'      -FilePath 'nltest.exe' -Arguments "/dsgetdc:$domainName"     -OutFile (Join-Path $adDir 'nltest_dsgetdc.txt')
+        Invoke-AndSave -Title 'NLTEST Secure channel query'  -FilePath 'nltest.exe' -Arguments "/sc_query:$domainName"    -OutFile (Join-Path $adDir 'nltest_sc_query.txt')
+        Invoke-AndSave -Title 'NLTEST Trusted domains'       -FilePath 'nltest.exe' -Arguments '/trusted_domains'         -OutFile (Join-Path $adDir 'nltest_trusted_domains.txt')
+        Invoke-AndSave -Title 'NLTEST DSREGDNS'              -FilePath 'nltest.exe' -Arguments '/dsregdns'                -OutFile (Join-Path $adDir 'nltest_dsregdns.txt')
+        Invoke-AndSave -Title 'NLTEST DSGETSITE'             -FilePath 'nltest.exe' -Arguments '/dsgetsite'               -OutFile (Join-Path $adDir 'nltest_dsgetsite.txt')
+    } else {
+        Save-Text -Path (Join-Path $adDir 'nltest_note.txt') -Text "Domain name could not be determined. Skipping nltest domain-targeted commands."
+    }
+
+    # ---------- AD database & log files on disk ----------
+    try {
+        $ntdsPath = $null
+        try { $ntdsPath = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters' -Name 'DSA Database file' -ErrorAction Stop).'DSA Database file' } catch {}
+        if (-not $ntdsPath) { $ntdsPath = "$env:WINDIR\NTDS" }
+
+        if (Test-Path -LiteralPath $ntdsPath) {
+            $ntdsFiles = Get-ChildItem -LiteralPath $ntdsPath -File -ErrorAction SilentlyContinue |
+                Select-Object Name, FullName, Extension, Length, CreationTime, LastWriteTime,
+                    @{n='SizeMB';e={ [Math]::Round($_.Length / 1MB, 2) }}
+            Save-ObjectCsv $ntdsFiles (Join-Path $adDir 'NTDS_Files_Inventory.csv')
+
+            $dst = Join-Path $adDir 'NTDS_Logs'
+            $null = New-Item -ItemType Directory -Force -Path $dst | Out-Null
+            # Copy ESE transaction logs and checkpoint; skip ntds.dit (locked/too large)
+            Copy-Item (Join-Path $ntdsPath 'edb*.log') -Destination $dst -Force -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $ntdsPath 'edb*.chk') -Destination $dst -Force -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $ntdsPath 'ntds.jrs') -Destination $dst -Force -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $ntdsPath 'res*.jrs') -Destination $dst -Force -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $ntdsPath 'temp*.edb') -Destination $dst -Force -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $ntdsPath 'edb.log')   -Destination $dst -Force -ErrorAction SilentlyContinue
+        }
+    } catch { Write-Warning "NTDS file collection failed: $_" }
+
+    # Netlogon + DFSR + Sysvol debug logs
+    try {
+        $debugDir = Join-Path $adDir 'Debug_Logs'
+        $null = New-Item -ItemType Directory -Force -Path $debugDir | Out-Null
+        $netlogonLog = "$env:WINDIR\debug\netlogon.log"
+        $netlogonBak = "$env:WINDIR\debug\netlogon.bak"
+        $netlogonDns = "$env:WINDIR\System32\config\netlogon.dns"
+        $netlogonDnb = "$env:WINDIR\System32\config\netlogon.dnb"
+        $netSetup    = "$env:WINDIR\debug\NetSetup.LOG"
+        $dcdiagLog   = "$env:WINDIR\debug\dcdiag.log"
+
+        foreach ($p in @($netlogonLog, $netlogonBak, $netlogonDns, $netlogonDnb, $netSetup, $dcdiagLog)) {
+            if (Test-Path -LiteralPath $p) {
+                Copy-Item -LiteralPath $p -Destination $debugDir -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        # DFSR debug logs (SYSVOL replication) - copy most recent only (can be many)
+        $dfsrLogDir = "$env:WINDIR\debug"
+        if (Test-Path $dfsrLogDir) {
+            $dfsrLogs = Get-ChildItem -Path $dfsrLogDir -Filter 'Dfsr*.log*' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 20
+            foreach ($f in $dfsrLogs) {
+                Copy-Item -LiteralPath $f.FullName -Destination $debugDir -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } catch { Write-Warning "AD debug log collection failed: $_" }
+
+    # SYSVOL / NETLOGON share health
+    try {
+        Get-SmbShare -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @('SYSVOL','NETLOGON') } |
+            Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'SysvolNetlogon_Shares.csv')
+    } catch {}
+
+    # ---------- NTDS registry config (incl. verbose diagnostics levels) ----------
+    try {
+        Invoke-CMD -FilePath 'reg.exe' -Arguments "export `"HKLM\SYSTEM\CurrentControlSet\Services\NTDS`" `"$(Join-Path $adDir 'NTDS_Service_HKLM.reg')`" /y" | Out-Null
+    } catch { Write-Warning "NTDS registry export failed: $_" }
+    try {
+        $diagKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Diagnostics'
+        if (Test-Path $diagKey) {
+            $diagVals = Get-ItemProperty -LiteralPath $diagKey -ErrorAction SilentlyContinue
+            if ($diagVals) {
+                $diagList = foreach ($prop in ($diagVals.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' })) {
+                    [PSCustomObject]@{ Setting = $prop.Name; Level = $prop.Value }
+                }
+                Save-ObjectCsv $diagList (Join-Path $adDir 'NTDS_Diagnostics_Levels.csv')
+            }
+        }
+    } catch {}
+
+    # LSA / Kerberos / NTLM policy config (authentication troubleshooting)
+    try {
+        Invoke-CMD -FilePath 'reg.exe' -Arguments "export `"HKLM\SYSTEM\CurrentControlSet\Control\Lsa`" `"$(Join-Path $adDir 'LSA_HKLM.reg')`" /y" | Out-Null
+    } catch {}
+    try {
+        $lsaKeys = @(
+            @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa';                                Name='LSA' },
+            @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos';                       Name='Kerberos' },
+            @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters';            Name='Kerberos_Parameters' },
+            @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0';                          Name='MSV1_0_NTLM' },
+            @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\pku2u';                           Name='pku2u' },
+            @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos'; Name='Kerberos_Policy' }
+        )
+        $lsaRows = foreach ($k in $lsaKeys) {
+            if (Test-Path $k.Path) {
+                $vals = Get-ItemProperty -LiteralPath $k.Path -ErrorAction SilentlyContinue
+                if ($vals) {
+                    foreach ($prop in ($vals.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' })) {
+                        [PSCustomObject]@{ Key = $k.Name; Setting = $prop.Name; Value = $prop.Value }
+                    }
+                }
+            }
+        }
+        if ($lsaRows) { Save-ObjectCsv $lsaRows (Join-Path $adDir 'Auth_LSA_Kerberos_NTLM_Config.csv') }
+    } catch {}
+
+    # ---------- AD database integrity + metadata (read-only) ----------
+    try {
+        $ntdsUtilOut = Join-Path $adDir 'ntdsutil_integrity.txt'
+        $tmpIn = [System.IO.Path]::GetTempFileName()
+        "activate instance ntds`r`nfiles`r`nintegrity`r`nq`r`nq`r`n" | Out-File -FilePath $tmpIn -Encoding ASCII -Force
+        $out = & cmd.exe /c "ntdsutil.exe `"popups off`" < `"$tmpIn`" 2>&1"
+        $out | Out-File -FilePath $ntdsUtilOut -Encoding UTF8 -Force
+        Remove-Item $tmpIn -Force -ErrorAction SilentlyContinue
+    } catch { Write-Warning "ntdsutil integrity check failed: $_" }
+
+    # ---------- NTDS performance snapshot (one-shot) ----------
+    try {
+        $adCounters = @(
+            '\NTDS\DRA Inbound Bytes Total/sec',
+            '\NTDS\DRA Outbound Bytes Total/sec',
+            '\NTDS\DRA Inbound Objects/sec',
+            '\NTDS\DRA Outbound Objects/sec',
+            '\NTDS\DRA Pending Replication Synchronizations',
+            '\NTDS\DRA Sync Requests Made',
+            '\NTDS\DRA Sync Requests Successful',
+            '\NTDS\DS Threads in Use',
+            '\NTDS\LDAP Client Sessions',
+            '\NTDS\LDAP Bind Time',
+            '\NTDS\LDAP Searches/sec',
+            '\NTDS\LDAP Writes/sec',
+            '\NTDS\Kerberos Authentications/sec',
+            '\NTDS\NTLM Authentications/sec',
+            '\Security System-Wide Statistics\Kerberos Authentications/sec',
+            '\Security System-Wide Statistics\NTLM Authentications/sec',
+            '\Security System-Wide Statistics\KDC AS Requests/sec',
+            '\Security System-Wide Statistics\KDC TGS Requests/sec'
+        )
+        $validAdCounters = @()
+        foreach ($c in $adCounters) {
+            try {
+                $null = Get-Counter -Counter $c -SampleInterval 1 -MaxSamples 1 -ErrorAction Stop
+                $validAdCounters += $c
+            } catch { Write-Verbose "AD counter unavailable: $c" }
+        }
+        if ($validAdCounters.Count -gt 0) {
+            $snap = Get-Counter -Counter $validAdCounters -SampleInterval 1 -MaxSamples 3 -ErrorAction SilentlyContinue
+            $rows = foreach ($sampleSet in $snap) {
+                foreach ($s in $sampleSet.CounterSamples) {
+                    [PSCustomObject]@{
+                        Timestamp = $sampleSet.Timestamp
+                        Path      = $s.Path
+                        Instance  = $s.InstanceName
+                        Value     = $s.CookedValue
+                    }
+                }
+            }
+            if ($rows) { Save-ObjectCsv $rows (Join-Path $adDir 'NTDS_PerfSnapshot.csv') }
+        }
+    } catch { Write-Verbose "NTDS perf snapshot failed: $_" }
+
+    # ---------- ActiveDirectory module deep inventory ----------
     if (Test-ImportModule -Name 'ActiveDirectory') {
         try { Get-ADDomain  | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADDomain.csv') } catch {}
         try { Get-ADForest  | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADForest.csv') } catch {}
-        try { Get-ADDomainController -Filter * | Select-Object HostName,Site,IPv4Address,OperatingSystem,IsGlobalCatalog |
+        try { Get-ADRootDSE | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADRootDSE.csv') } catch {}
+        try { Get-ADDomainController -Filter * | Select-Object HostName,Site,IPv4Address,OperatingSystem,OperatingSystemVersion,IsGlobalCatalog,IsReadOnly,Enabled,LdapPort,SslPort |
                 Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADDomainControllers.csv') } catch {}
+        try { Get-ADDomainController -Filter * | Select-Object * |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADDomainControllers_Full.csv') } catch {}
+
+        # Replication
+        try { Get-ADReplicationSite -Filter * | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationSites.csv') } catch {}
+        try { Get-ADReplicationSubnet -Filter * | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationSubnets.csv') } catch {}
+        try { Get-ADReplicationSiteLink -Filter * | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationSiteLinks.csv') } catch {}
+        try { Get-ADReplicationConnection -Filter * | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationConnections.csv') } catch {}
+        try { Get-ADReplicationFailure -Target $env:COMPUTERNAME | Select-Object * |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationFailures.csv') } catch {}
+        try { Get-ADReplicationPartnerMetadata -Target $env:COMPUTERNAME | Select-Object * |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationPartnerMetadata.csv') } catch {}
+        try { Get-ADReplicationQueueOperation -Target $env:COMPUTERNAME | Select-Object * |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADReplicationQueue.csv') } catch {}
+
+        # Trusts and optional features
+        try { Get-ADTrust -Filter * | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADTrusts.csv') } catch {}
+        try { Get-ADOptionalFeature -Filter * | Select-Object Name, Enabled, ForestFQDN, DistinguishedName |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADOptionalFeatures.csv') } catch {}
+
+        # Account / password policy health
+        try { Get-ADDefaultDomainPasswordPolicy | Select-Object * | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADDefaultDomainPasswordPolicy.csv') } catch {}
+        try { Get-ADFineGrainedPasswordPolicy -Filter * | Select-Object Name, Precedence, AppliesTo, MinPasswordLength, PasswordHistoryCount, MaxPasswordAge, MinPasswordAge, LockoutThreshold, LockoutDuration |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADFineGrainedPasswordPolicies.csv') } catch {}
+
+        # krbtgt password age (key rolling check)
+        try {
+            $krbtgt = Get-ADUser 'krbtgt' -Properties PasswordLastSet -ErrorAction SilentlyContinue
+            if ($krbtgt) {
+                [PSCustomObject]@{
+                    Account          = 'krbtgt'
+                    PasswordLastSet  = $krbtgt.PasswordLastSet
+                    PasswordAgeDays  = if ($krbtgt.PasswordLastSet) { [int]((Get-Date) - $krbtgt.PasswordLastSet).TotalDays } else { $null }
+                } | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'AD_Krbtgt_PasswordAge.csv')
+            }
+        } catch {}
+
+        # Service accounts (gMSA) inventory
+        try { Get-ADServiceAccount -Filter * -Properties * | Select-Object Name, DistinguishedName, Enabled, PasswordLastSet, PrincipalsAllowedToRetrieveManagedPassword |
+                Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $adDir 'ADServiceAccounts.csv') } catch {}
     } else {
-        Save-Text -Path (Join-Path $adDir 'README.txt') -Text "ActiveDirectory module not available; collected dcdiag/repadmin/netdom/nltest instead."
+        Save-Text -Path (Join-Path $adDir 'README.txt') -Text "ActiveDirectory module not available; collected dcdiag/repadmin/netdom/nltest/w32tm/NTDS files and registry exports instead."
     }
+
+    Write-Detail "Active Directory collection completed"
 }
 
 # ---- DNS Server ----
@@ -1086,7 +1359,19 @@ $eventLogs = @(
 )
 
 if ($roles.IsADDS) {
-    $eventLogs += @('Directory Service','DFS Replication','Microsoft-Windows-Kerberos/Operational')
+    $eventLogs += @(
+        'Directory Service',
+        'DFS Replication',
+        'File Replication Service',
+        'Security',
+        'Microsoft-Windows-Kerberos/Operational',
+        'Microsoft-Windows-Kerberos-Key-Distribution-Center/Operational',
+        'Microsoft-Windows-NTLM/Operational',
+        'Microsoft-Windows-LSA/Operational',
+        'Microsoft-Windows-Directory-Services-SAM/Operational',
+        'Microsoft-Windows-ActiveDirectory_DomainService/Operational',
+        'Microsoft-Windows-DFSR-Server/Diagnostic'
+    )
 }
 if ($roles.IsDNS)  { $eventLogs += @('DNS Server','Microsoft-Windows-DNS-Server/Operational') }
 if ($roles.IsDHCP) { $eventLogs += @('Microsoft-Windows-DHCP-Server/Operational') }
@@ -1134,18 +1419,18 @@ $eventLogs = $eventLogs | Select-Object -Unique
 $available = @{}
 try { wevtutil el | ForEach-Object { $available[$_] = $true } } catch { Write-Warning "Failed to enumerate event logs via wevtutil el: $_" }
 
-$exported = New-Object System.Collections.Generic.List[string]
-$skipped  = New-Object System.Collections.Generic.List[string]
+$exported = @()
+$skipped  = @()
 
 foreach ($logName in $eventLogs) {
     try {
-        if (-not $available.ContainsKey($logName)) { $skipped.Add($logName) | Out-Null; continue }
+        if (-not $available.ContainsKey($logName)) { $skipped += $logName; continue }
         $safeName = ($logName -replace '[\\/]', '_')
         $evtxPath = Join-Path $evDir "$safeName.evtx"
         wevtutil epl "$logName" "$evtxPath"
-        $exported.Add($logName) | Out-Null
+        $exported += $logName
     } catch {
-        $skipped.Add($logName) | Out-Null
+        $skipped += $logName
     }
 }
 
@@ -1390,7 +1675,7 @@ try {
 } catch {}
 
 $readme = @"
-Windows Server Health & Performance Collection (v5.7.2)
+Windows Server Health & Performance Collection (v5.9.1)
 Computer:  $computer
 Timestamp: $timestamp
 
@@ -1400,7 +1685,13 @@ Folders:
 - Health: DISM/SFC health results, CBS/DISM logs, crash dumps (with inventory CSV), WER artifacts (parsed .wer + binary inventory CSV)
 - GroupPolicy: applied GPO names and full configuration (gpresult /R text, /X XML, /H HTML, parsed CSV)
 - RoleSpecific: AD/CA/DNS/DHCP/Hyper-V/Cluster/S2D + RDMA + SAN artifacts
-- EventLogs: exported .evtx channels; see FoundVsSkipped.txt
+- RoleSpecific\ActiveDirectory (when AD DS detected): DC summary, dcdiag (incl. DNS/SysVol/NetLogons/Services/Advertising),
+  repadmin suite (replsummary/showrepl/queue/showconn/bind/options/istg/bridgeheads), DFSR (state/poll/backlog),
+  klist + nltest + w32tm auth/secure-channel data, NTDS files inventory + ESE logs/checkpoint,
+  netlogon/DFSR/debug logs, SYSVOL/NETLOGON share check, NTDS + LSA/Kerberos/NTLM registry config,
+  ntdsutil integrity, NTDS perf snapshot, AD module inventory (sites/subnets/links/connections/failures/
+  partner metadata/queue/trusts/password policies/krbtgt age/gMSA)
+- EventLogs: exported .evtx channels; see FoundVsSkipped.txt (AD: Directory Service, DFS Replication, FRS, Security, Kerberos, KDC, NTLM, LSA, SAM, AD DS Operational)
 - EventLogs\Converted: EVTX converted to TXT/XML/CSV (capped by -EvtxMaxEvents)
 - Performance: perf counters (.blg + .csv), quick snapshot, per-NIC throughput
 - Analytic-Ready: single place to upload (CSV/TXT/XML + role-specific data)
@@ -1429,10 +1720,10 @@ if (-not $NoZip) {
                 Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
             }
 
-            Compress-Archive -Path $tempStage -DestinationPath $zipPath -CompressionLevel Optimal
+            Compress-Folder -SourceFolder $tempStage -DestinationZip $zipPath
             Remove-Item $tempStage -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
         } else {
-            Compress-Archive -Path $OutDir -DestinationPath $zipPath -CompressionLevel Optimal
+            Compress-Folder -SourceFolder $OutDir -DestinationZip $zipPath
         }
 
         Write-Host "Done. Output folder: $OutDir"

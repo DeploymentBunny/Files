@@ -46,8 +46,8 @@
     .\Check-WindowsClientSecurityBaseline.ps1 -OutputPath C:\Temp\SecurityChecks
 .Notes
     ScriptName: Check-WindowsClientSecurityBaseline.ps1
-    Version:    1.7.27
-    Updated:    2026-05-07
+    Version:    1.7.33
+    Updated:    2026-09-17
     Author:     Mikael Nystrom
     Blog:       https://www.deploymentbunny.com
     Disclaimer:
@@ -74,7 +74,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:LogFile = $null
-$script:Results = New-Object System.Collections.Generic.List[object]
+$script:Results = @()
 $script:FatalError = $null
 
 function Write-Log {
@@ -117,13 +117,13 @@ function Add-Result {
         [object]$RawValue
     )
 
-    $obj = [PSCustomObject]@{
+    $obj = @{
         Check    = $CheckName
         Status   = $Status
         Details  = $Details
     }
 
-    $script:Results.Add($obj) | Out-Null
+    $script:Results += $obj
 
     if ($Status -eq 'True' -or $Status -eq 'NA') {
         Write-Log -Message ('{0}: {1} - {2}' -f $CheckName, $Status, $Details)
@@ -137,9 +137,25 @@ function Add-Result {
 }
 
 function Test-Administrator {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $whoamiOutput = @(& whoami.exe /groups 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $whoamiOutput.Count -eq 0) {
+        return $false
+    }
+    return ($whoamiOutput -join "`n") -match 'S-1-5-32-544'
+}
+
+function ConvertTo-DisplayObject {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$InputObject
+    )
+
+    # Select-Object on an empty string builds a real object with note properties, CLM-safe (no [PSCustomObject]/New-Object).
+    $obj = '' | Select-Object -Property Check, Status, Details
+    $obj.Check = $InputObject.Check
+    $obj.Status = $InputObject.Status
+    $obj.Details = $InputObject.Details
+    return $obj
 }
 
 function Get-PropertySafe {
@@ -378,8 +394,8 @@ try {
             $entraJoined = ($dsRegRaw -match '(?im)^\s*AzureAdJoined\s*:\s*YES\s*$')
             $workplaceJoined = ($dsRegRaw -match '(?im)^\s*WorkplaceJoined\s*:\s*YES\s*$')
 
-            $mdmUrlMatch = [regex]::Match($dsRegRaw, '(?im)^\s*MdmUrl\s*:\s*(.+)\s*$')
-            $mdmUrl = if ($mdmUrlMatch.Success) { $mdmUrlMatch.Groups[1].Value.Trim() } else { '' }
+            $mdmUrlMatched = ($dsRegRaw -match '(?im)^\s*MdmUrl\s*:\s*(.+)\s*$')
+            $mdmUrl = if ($mdmUrlMatched) { $matches[1].Trim() } else { '' }
             $intuneManaged = -not [string]::IsNullOrWhiteSpace($mdmUrl) -and $mdmUrl -notmatch '^(N/?A|-)$'
 
             $entraDetails = if ($entraJoined) {
@@ -720,16 +736,15 @@ try {
     }
 
     try {
-        $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $currentName = $currentIdentity.Name
-        $currentShortName = if ($currentName -match '^[^\\]+\\(.+)$') { $matches[1] } else { $currentName }
+        $currentName = "{0}\{1}" -f $env:USERDOMAIN, $env:USERNAME
+        $currentShortName = $env:USERNAME
 
         $netOutput = @(& net.exe localgroup Administrators 2>&1)
         if ($LASTEXITCODE -ne 0 -or $netOutput.Count -eq 0) {
             throw "net localgroup Administrators failed. Exit code: $LASTEXITCODE"
         }
 
-        $adminMembers = New-Object System.Collections.Generic.List[string]
+        $adminMembers = @()
         $inMembersSection = $false
         $seenMember = $false
         foreach ($line in $netOutput) {
@@ -751,12 +766,12 @@ try {
 
             $member = $trimmed.TrimStart('*').Trim()
             if (-not [string]::IsNullOrWhiteSpace($member)) {
-                $adminMembers.Add($member) | Out-Null
+                $adminMembers += $member
                 $seenMember = $true
             }
         }
 
-        if ($adminMembers.Count -eq 0) {
+        if ($adminMembers.Length -eq 0) {
             throw 'No members parsed from net localgroup Administrators output.'
         }
 
@@ -931,7 +946,7 @@ try {
         $activeFirewallProfiles = @(
             $activeConnections |
                 ForEach-Object {
-                    switch ($_.NetworkCategory.ToString()) {
+                    switch ([string]$_.NetworkCategory) {
                         'DomainAuthenticated' { 'Domain' }
                         'Private' { 'Private' }
                         'Public' { 'Public' }
@@ -994,7 +1009,7 @@ try {
                         $ruleProfile = [string]$_.Profile
                         $matchesActiveProfile = $false
                         foreach ($activeProfile in $activeFirewallProfiles) {
-                            if ($ruleProfile -match "(^|,\s*)$([regex]::Escape($activeProfile))(,|$)") {
+                            if ($ruleProfile -match "(^|,\s*)$activeProfile(,|$)") {
                                 $matchesActiveProfile = $true
                                 break
                             }
@@ -1057,25 +1072,25 @@ try {
     $naCount = @($script:Results | Where-Object { $_.Status -eq 'NA' }).Count
 
     $resultWithLogFiles = @(
-        $script:Results.ToArray()
-        [PSCustomObject]@{
+        $script:Results
+        @{
             Check = 'Json File'
             Status = 'NA'
             Details = $jsonFile
         }
-        [PSCustomObject]@{
+        @{
             Check = 'Text File'
             Status = 'NA'
             Details = $txtFile
         }
-        [PSCustomObject]@{
+        @{
             Check = 'Log File'
             Status = 'NA'
             Details = $script:LogFile
         }
     )
 
-    $report = [PSCustomObject]@{
+    $report = @{
         ComputerName = $computerName
         Timestamp = (Get-Date)
         TrueCount = $trueCount
@@ -1086,7 +1101,7 @@ try {
         Result = $resultWithLogFiles
     }
 
-    $reportForFile = [PSCustomObject]@{
+    $reportForFile = @{
         ComputerName = $report.ComputerName
         Timestamp = $report.Timestamp
         TrueCount = $report.TrueCount
@@ -1096,7 +1111,7 @@ try {
         TotalCount = $report.TotalCount
         Result = @(
             $report.Result | ForEach-Object {
-                [PSCustomObject]@{
+                @{
                     Check = $_.Check
                     Status = $_.Status
                     Details = $_.Details
@@ -1107,14 +1122,15 @@ try {
 
     $reportForFile | ConvertTo-Json -Depth 6 | Out-File -FilePath $jsonFile -Encoding UTF8
 
-    $textLines = New-Object System.Collections.Generic.List[string]
-    $textLines.Add("ComputerName: $computerName") | Out-Null
-    $textLines.Add("Timestamp: $(Get-Date -Format s)") | Out-Null
-    $textLines.Add('') | Out-Null
-    $textLines.Add('Check Results:') | Out-Null
+    $textLines = @(
+        "ComputerName: $computerName",
+        "Timestamp: $(Get-Date -Format s)",
+        '',
+        'Check Results:'
+    )
 
     foreach ($item in $script:Results) {
-        $textLines.Add("- $($item.Check): $($item.Status) - $($item.Details)") | Out-Null
+        $textLines += "- $($item.Check): $($item.Status) - $($item.Details)"
     }
 
     $textLines | Out-File -FilePath $txtFile -Encoding UTF8
@@ -1180,11 +1196,11 @@ try {
             $report.Result | Where-Object {
                 (( $_.Check -in $issueWhenFalseChecks) -and ($_.Status -eq 'False')) -or
                 (( $_.Check -in $issueWhenTrueChecks) -and ($_.Status -eq 'True'))
-            }
+            } | ForEach-Object { ConvertTo-DisplayObject -InputObject $_ }
         )
     }
     else {
-        Write-Output $report.Result
+        Write-Output ($report.Result | ForEach-Object { ConvertTo-DisplayObject -InputObject $_ })
     }
 
     $problemTrueCount = @(
