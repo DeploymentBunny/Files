@@ -1,12 +1,53 @@
 # LogCollectionPack
 
-This folder contains two diagnostic collection scripts — one for Windows Server and one for Windows client (Windows 7, 10, 11).
-Both scripts are read-only from a system-configuration perspective and only write collection artifacts.
+This folder contains diagnostic collection scripts for Windows Server and Windows clients, plus focused troubleshooting tools.
+The collection scripts are read-only from a system-configuration perspective and only write collection artifacts.
 
 | Script | Target OS | Default Output |
 |---|---|---|
 | `Collect-WindowsServerLogs.ps1` | Windows Server | `C:\WS-Diagnostics` |
 | `Collect-WindowsClient.ps1` | Windows 7 / 10 / 11 | `C:\WC-Diagnostics` |
+| [Get-TSxBoots.ps1](./Get-TSxBoots.ps1) | Windows Server / Windows client (PowerShell 5.1+) | `C:\Temp\Boot-Diagnostics` |
+
+## Boot, Restart, Shutdown and BSOD History
+
+Run [Get-TSxBoots.ps1](./Get-TSxBoots.ps1) from an elevated PowerShell session:
+
+```powershell
+.\Get-TSxBoots.ps1
+.\Get-TSxBoots.ps1 -OutputRoot 'D:\Diagnostics' -Verbose
+.\Get-TSxBoots.ps1 -DisplayCount 20
+```
+
+After collection, a compact colored quick view shows the latest 12 records
+(newest first) with local time, event type, ID when space permits, and a shortened
+reason/comment. It adapts to console width and height. Green indicates boot,
+cyan shutdown/restart requests, yellow unexpected shutdowns/warnings, red
+BSOD/dump errors, magenta user-supplied reasons, and gray informational events.
+Use `-DisplayCount` to change the limit or `-DisplayCount 0` to disable the view.
+The limit and shortened display text do **not** affect the exported files.
+
+Exports **all retained matching System events**, without a date or count limit,
+into a unique timestamped folder:
+- `BootEvents.evtx`: native filtered event-log snapshot.
+- `BootEvents.csv`: chronological records with category, UTC time, process/user,
+  reason/code, shutdown type, user comment, bugcheck/dump details, message and event data JSON.
+- `BootEvents.xml`: original event XML, preserving all data fields.
+- `Summary.json`: event/category counts, retained time range and selection query.
+- `README.txt`: interpretation notes; `CollectionIssues.txt` is created for missing messages or an empty history.
+
+Includes Kernel-General 12/13 (boot/shutdown), Kernel-Boot 20/27 (boot status/type),
+Kernel-Power 41/109 (unclean restart/shutdown transition), EventLog 6005/6006/6008/6009
+(logging service start/stop, unexpected shutdown, startup OS version), User32 1074
+(shutdown/restart request and supplied reason/comment), User32 1076 (user's subsequent
+explanation of an unexpected shutdown), bugcheck 1001 from WER/BugCheck/Save Dump,
+volmgr 46/161 (dump failures) and Eventlog 104 (log cleared).
+
+Several records may describe the same restart; this is not a physical boot count.
+Unexpected shutdown and BSOD reports may be logged at the next boot. Kernel-Power 41
+alone does not establish a root cause or prove a BSOD. Reasons/comments are included
+when Windows recorded them; prior cleared/overwritten history cannot be recovered.
+Crash dumps are not copied. Protect account names and free-text comments before sharing.
 
 ---
 
@@ -188,7 +229,11 @@ This tool creates a full health snapshot of a Windows Server so it can be review
 
 It gathers:
 - Basic server details (name, version, uptime, hardware summary)
-- Event logs
+- Event logs, including the full Security log on every server
+- When AD DS is detected (NTDS service exists): Directory Service, DFS Replication, File Replication Service,
+  Active Directory Web Services, and all registered AD/directory services, authentication, SYSVOL replication,
+  DNS Server, Group Policy and Time Service event channels (not just a fixed list of Operational channels)
+  including Security-Kerberos and protected-user/authentication-policy channels
 - Performance data (CPU, memory, disk, network)
 - Patch and role information
 - Health checks (DISM, optional deep checks)
@@ -273,6 +318,8 @@ Inside it, you will see folders like:
 
 Notable outputs include:
 - EventLogs\Converted (EVTX converted to TXT/XML/CSV)
+- EventLogs\Security.evtx (Security log, collected regardless of installed roles)
+- EventLogs\FoundVsSkipped.txt (exported/missing channels and export failure details)
 - Health\CrashDumps\CrashDump_Presence.txt (YES/NO + count)
 - Health\WER (WER files + parsed `.wer` CSV)
 
@@ -322,14 +369,20 @@ Fix: Current script version auto-skips iSCSI collection when `MSiSCSI` is not ru
 - `-ExcludeEvtxFromZip`: Keep EVTX out of ZIP while keeping converted files.
 
 Notes:
+- AD-related diagnostic, debug and analytic channels are selected when present; the script does not enable
+  channels or change auditing. Disabled or inaccessible logs that cannot be exported are reported as failures.
+- Native EVTX exports contain the available log history; `-EvtxMaxEvents` caps only TXT/XML/CSV conversion
+  (default `250000` events per log).
+- Security and AD logs can contain sensitive account and authentication details. Protect the output folder
+  and ZIP, and share them only with authorized recipients.
 - Java metrics are auto-detected (collected only when java.exe processes exist).
 - Missing performance counters are handled silently and skipped.
 - Cluster logs are collected with full available history (no time-span limit parameter).
 
 ## Version
 - Script name: `Collect-WindowsServerLogs.ps1`
-- Script version: `5.6.2`
-- Last updated in script header: `2026-05-19`
+- Script version: `5.9.2`
+- Last updated in script header: `2026-10-08`
 
 ## Contact
 - Deployment Bunny: https://www.deploymentbunny.com

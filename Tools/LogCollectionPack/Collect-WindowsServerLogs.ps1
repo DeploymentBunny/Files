@@ -10,6 +10,8 @@
     When AD DS is detected, the script performs a deep Active Directory collection covering DC health (dcdiag),
     replication (repadmin/DFSR), authentication (Kerberos/NTLM/secure channel), AD database/log files on disk,
     NTDS configuration, and the AD module inventory (topology, replication metadata, trusts, password policy).
+    The Security event log is collected on every server. When AD DS is detected, all registered AD-related
+    event channels are also selected, including diagnostic and analytic channels, without enabling them.
     Exported EVTX files are converted to TXT, XML, and CSV for easier analytics consumption.
     Java process metrics are collected automatically when java.exe processes are present.
     Use -Verbose for detailed progress and decision logging.
@@ -42,11 +44,11 @@
 
 .NOTES
     FileName:  Collect-WindowsServerLogs.ps1
-    Version:   5.9.1
+    Version:   5.9.2
     Author:    Mikael Nystrom
     Contact:   deploymentbunny@outlook.com
     Created:   2026-05-22
-    Updated:   2026-09-22
+    Updated:   2026-10-08
     Blog:      https://www.deploymentbunny.com
 
 .LINK
@@ -1349,7 +1351,7 @@ $evDir = Join-Path $OutDir 'EventLogs'
 $null = New-Item -ItemType Directory -Force -Path $evDir | Out-Null
 
 $eventLogs = @(
-    'System','Application','Setup',
+    'System','Application','Setup','Security',
     'Microsoft-Windows-WindowsUpdateClient/Operational',
     'Microsoft-Windows-Servicing/Operational',
     'Microsoft-Windows-WER-SystemErrorReporting/Operational',
@@ -1363,7 +1365,7 @@ if ($roles.IsADDS) {
         'Directory Service',
         'DFS Replication',
         'File Replication Service',
-        'Security',
+        'Active Directory Web Services',
         'Microsoft-Windows-Kerberos/Operational',
         'Microsoft-Windows-Kerberos-Key-Distribution-Center/Operational',
         'Microsoft-Windows-NTLM/Operational',
@@ -1417,20 +1419,39 @@ $eventLogs += @(
 $eventLogs = $eventLogs | Select-Object -Unique
 
 $available = @{}
-try { wevtutil el | ForEach-Object { $available[$_] = $true } } catch { Write-Warning "Failed to enumerate event logs via wevtutil el: $_" }
+try {
+    $logNames = @(wevtutil el 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "wevtutil el failed (exit code $LASTEXITCODE): $($logNames -join '; ')"
+    }
+    foreach ($logName in $logNames) { $available[[string]$logName] = $true }
+} catch { Write-Warning "Failed to enumerate event logs via wevtutil el: $_" }
+
+if ($roles.IsADDS) {
+    # Discover every channel in these provider families, not just known Operational channels.
+    $adChannelPattern = '^Microsoft-Windows-(ActiveDirectory[^/]*|DirectoryServices[^/]*|Directory-Services[^/]*|ADWS|NTDS|Authentication[^/]*|(?:Security-)?(?:Kerberos[^/]*|KDC|NTLM|LSA|SAM|Netlogon)|DFSR[^/]*|DNS-Server[^/]*|GroupPolicy|Time-Service)(/|$)'
+    $eventLogs += @($available.Keys | Where-Object { $_ -match $adChannelPattern } | Sort-Object)
+    $eventLogs = @($eventLogs | Select-Object -Unique)
+}
 
 $exported = @()
 $skipped  = @()
+$exportFailures = @()
 
 foreach ($logName in $eventLogs) {
     try {
         if (-not $available.ContainsKey($logName)) { $skipped += $logName; continue }
         $safeName = ($logName -replace '[\\/]', '_')
         $evtxPath = Join-Path $evDir "$safeName.evtx"
-        wevtutil epl "$logName" "$evtxPath"
+        $exportOutput = @(wevtutil epl "$logName" "$evtxPath" 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            throw "wevtutil epl failed (exit code $LASTEXITCODE): $($exportOutput -join '; ')"
+        }
         $exported += $logName
     } catch {
         $skipped += $logName
+        $exportFailures += "${logName}: $_"
+        Write-Warning "Failed to export event log '${logName}': $_"
     }
 }
 
@@ -1445,6 +1466,9 @@ $( ($exported | ForEach-Object { "  - $_" }) -join "`n" )
 
 Skipped (missing/not accessible):
 $( ($skipped | ForEach-Object { "  - $_" }) -join "`n" )
+
+Export failures:
+$( ($exportFailures | ForEach-Object { "  - $_" }) -join "`n" )
 "@ | Out-File -FilePath (Join-Path $evDir 'FoundVsSkipped.txt') -Encoding UTF8
 
 # -------------------- EVTX Auto-Conversion (TXT + XML + CSV) --------------------
@@ -1675,7 +1699,7 @@ try {
 } catch {}
 
 $readme = @"
-Windows Server Health & Performance Collection (v5.9.1)
+Windows Server Health & Performance Collection (v5.9.2)
 Computer:  $computer
 Timestamp: $timestamp
 
@@ -1691,13 +1715,17 @@ Folders:
   netlogon/DFSR/debug logs, SYSVOL/NETLOGON share check, NTDS + LSA/Kerberos/NTLM registry config,
   ntdsutil integrity, NTDS perf snapshot, AD module inventory (sites/subnets/links/connections/failures/
   partner metadata/queue/trusts/password policies/krbtgt age/gMSA)
-- EventLogs: exported .evtx channels; see FoundVsSkipped.txt (AD: Directory Service, DFS Replication, FRS, Security, Kerberos, KDC, NTLM, LSA, SAM, AD DS Operational)
+- EventLogs: exported .evtx channels including Security on every server; see FoundVsSkipped.txt for missing channels and export failures.
+  When AD DS is detected: Directory Service, DFS Replication, FRS, Active Directory Web Services, and all registered
+  AD DS/AD WS/directory services, Authentication (including protected-user/authentication-policy events),
+  Kerberos/KDC/NTLM/LSA/SAM/Netlogon, DFSR, DNS Server, Group Policy and Time Service channels.
 - EventLogs\Converted: EVTX converted to TXT/XML/CSV (capped by -EvtxMaxEvents)
 - Performance: perf counters (.blg + .csv), quick snapshot, per-NIC throughput
 - Analytic-Ready: single place to upload (CSV/TXT/XML + role-specific data)
 
 Notes:
-- Debug/Analytic event channels are exported only if they exist and are enabled.
+- Existing AD-related Debug/Analytic channels are selected too; channels are never enabled or reconfigured.
+  Disabled or inaccessible channels that cannot be exported are recorded as export failures.
 - Self-test mode: -SelfTest / -ValidateOnly runs static parse audit and exits.
 "@
 $readme | Out-File -FilePath (Join-Path $OutDir 'README.txt') -Encoding UTF8
