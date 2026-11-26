@@ -20,11 +20,11 @@ Suppresses host progress output.
 
 .NOTES
 	FileName:    Update-TSxESDCatalogs.ps1
-	Version:     1.3.10
+	Version:     1.3.11
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-21
+	Updated:     2026-11-26
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -120,13 +120,19 @@ function Complete-TSxProgress {
 
 $Script:DefaultCatalogPath = Join-Path $PSScriptRoot 'Catalogs'
 
-function Get-Microsoft25H2CatalogUrl {
+function Get-MicrosoftCatalogUrl {
 	[CmdletBinding()]
-	param()
+	param(
+		[Parameter(Mandatory = $true)]
+		[ValidateSet('25H2', '26H2')]
+		[string]$Release,
+
+		[Parameter(Mandatory = $true)]
+		[string[]]$TargetVersions
+	)
 
 	$uri = 'https://fe3.delivery.mp.microsoft.com/UpdateMetadataService/updates/search/v1/bydeviceinfo'
 	$ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MediaCreationTool/10.0'
-	$targetVersions = @('26200.0.0.0', '26100.0.0.0')
 	$deviceAttributes = @(
 		'MediaBranch=br_release'
 		'App=Setup360'
@@ -154,7 +160,7 @@ function Get-Microsoft25H2CatalogUrl {
 
 	foreach ($targetVersion in $targetVersions) {
 		$body = @{ Products = "PN=Windows.Products.Cab.amd64&V=$targetVersion"; DeviceAttributes = $deviceAttributes } | ConvertTo-Json -Compress
-		Write-TSxLog -Message "Trying 25H2 catalog lookup for target version: $targetVersion" -WriteVerbose
+		Write-TSxLog -Message "Trying $Release catalog lookup for target version: $targetVersion" -WriteVerbose
 
 		try {
 			$response = Invoke-RestMethod -Uri $uri -Method Post -Body $body -Headers @{ 'Content-Type' = 'application/json'; Accept = '*/*'; 'User-Agent' = $ua } -TimeoutSec 60
@@ -170,12 +176,12 @@ function Get-Microsoft25H2CatalogUrl {
 				return $response.Updates[0].FileLocations[0].Url
 			}
 		} catch {
-			Write-TSxLog -Level 'WARN' -Message "25H2 lookup attempt failed for ${targetVersion}: $($_.Exception.Message)" -WriteVerbose
+			Write-TSxLog -Level 'WARN' -Message "$Release lookup attempt failed for ${targetVersion}: $($_.Exception.Message)" -WriteVerbose
 			continue
 		}
 	}
 
-	throw 'Unable to resolve a Microsoft 25H2 catalog URL.'
+	throw "Unable to resolve a Microsoft $Release catalog URL."
 }
 
 function Update-MicrosoftCatalogFiles {
@@ -201,7 +207,8 @@ function Update-MicrosoftCatalogFiles {
 		@{ Name = '22621.1702-win11-22h2.xml'; Url = 'https://download.microsoft.com/download/b/1/9/b19bd7fd-78c4-4f88-8c40-3e52aee143c2/products_win11_20230510.cab.cab' }
 		@{ Name = '22631.2861-win11-23h2.xml'; Url = 'https://download.microsoft.com/download/6/2/b/62b47bc5-1b28-4bfa-9422-e7a098d326d4/products_win11_20231208.cab' }
 		@{ Name = '26100.4349-win11-24h2.xml'; Url = 'https://download.microsoft.com/download/8e0c23e7-ddc2-45c4-b7e1-85a808b408ee/Products-Win11-24H2-6B.cab' }
-		@{ Name = '26200.8246-win11-25h2.xml'; UrlScript = { Get-Microsoft25H2CatalogUrl } }
+		@{ Name = '26200.8246-win11-25h2.xml'; UrlScript = { Get-MicrosoftCatalogUrl -Release '25H2' -TargetVersions @('26200.0.0.0', '26100.0.0.0') } }
+		@{ Name = '26300.9457-win11-26h2.xml'; UrlScript = { Get-MicrosoftCatalogUrl -Release '26H2' -TargetVersions @('26300.0.0.0') } }
 	)
 
 	$results = New-Object System.Collections.Generic.List[object]

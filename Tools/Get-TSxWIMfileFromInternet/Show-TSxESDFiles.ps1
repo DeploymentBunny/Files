@@ -35,11 +35,11 @@ Optional operating system name filter, for example Windows 10 or Windows 11.
 
 .NOTES
 	FileName:    Show-TSxESDFiles.ps1
-	Version:     1.2.10
+	Version:     1.2.11
 	Author:      Mikael Nystrom
 	Contact:     deploymentbunny@outlook.com
 	Created:     2026-04-23
-	Updated:     2026-05-27
+	Updated:     2026-11-26
 	Twitter:     @mikael_nystrom
 
 	Disclaimer:
@@ -187,6 +187,7 @@ function ConvertTo-OSDCloudOperatingSystemName {
 		'22631' { return [PSCustomObject]@{ OperatingSystem = 'Windows 11 23H2'; OSName = 'Windows 11'; OSVersion = '23H2' } }
 		'26100' { return [PSCustomObject]@{ OperatingSystem = 'Windows 11 24H2'; OSName = 'Windows 11'; OSVersion = '24H2' } }
 		'26200' { return [PSCustomObject]@{ OperatingSystem = 'Windows 11 25H2'; OSName = 'Windows 11'; OSVersion = '25H2' } }
+		'26300' { return [PSCustomObject]@{ OperatingSystem = 'Windows 11 26H2'; OSName = 'Windows 11'; OSVersion = '26H2' } }
 		'28000' { return [PSCustomObject]@{ OperatingSystem = 'Windows 11 26H1'; OSName = 'Windows 11'; OSVersion = '26H1' } }
 		default { return $null }
 	}

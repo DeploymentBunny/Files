@@ -86,6 +86,12 @@ Show Windows 11 24H2 entries:
 .\Show-TSxESDFiles.ps1 -Version 24H2
 ~~~
 
+Show Windows 11 26H2 entries:
+
+~~~powershell
+.\Show-TSxESDFiles.ps1 -Version 26H2
+~~~
+
 Output as JSON (for integrations):
 
 ~~~powershell
@@ -187,7 +193,7 @@ $choice | .\Invoke-TSxESDDownload.ps1 -OutputPath "C:\Temp\ESD" -ConvertToWim -I
 
 - Language: en-us, sv-se, de-de, etc.
 - Architecture: amd64 (most common), arm64
-- Version: 22H2, 23H2, 24H2, build number, etc.
+- Version: 22H2, 23H2, 24H2, 25H2, 26H2, build number, etc.
 - OSLicense: Retail or Volume
 
 Example:
@@ -303,4 +309,4 @@ What each line does:
 
 ## Version
 
-Guide date: 2026-05-18
+Guide date: 2026-11-26
